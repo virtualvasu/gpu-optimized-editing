@@ -159,7 +159,7 @@ async function remote(task, inDir, files, outDir, opts) {
         if (r.ok) return r;
         let e = r.statusText; try { e = (await r.json()).error; } catch {}
         die(`worker ${base}: ${e}`);
-      } catch (e) { if (i >= tries) die(`worker ${base} unreachable: ${e.cause?.code || e.message}`); await sleep(3000); }
+      } catch (e) { if (i >= tries) die(`worker ${base} unreachable: ${e.cause?.code || e.message} (network or VPN: is this machine on the network that reaches it?)`); await sleep(3000); }
     }
   };
   const size = +execFileSync('du', ['-sbcL', ...files], { cwd: inDir }).toString().trim().split('\n').pop().split('\t')[0];
@@ -296,7 +296,7 @@ const commands = {
   },
   async worker() {
     if (!WORKER) die('no render machine set: add worker=http://<host>:8787 and worker_token=… to ' + path.join(HERE, '.env'));
-    const r = await fetch(WORKER.replace(/\/+$/, '') + '/health', { headers: { authorization: `Bearer ${WORKER_TOKEN}` } }).catch((e) => die(`${WORKER} unreachable: ${e.cause?.code || e.message}`));
+    const r = await fetch(WORKER.replace(/\/+$/, '') + '/health', { headers: { authorization: `Bearer ${WORKER_TOKEN}` } }).catch((e) => die(`${WORKER} unreachable: ${e.cause?.code || e.message} (network or VPN: is this machine on the network that reaches it?)`));
     if (!r.ok) die(`${WORKER}: ${r.status} ${r.statusText}`);
     const h = await r.json();
     console.log(`${WORKER}: ${h.busy ? 'busy' : 'idle'}, ${h.cpus} cpus, ${h.gpu || 'no GPU found'}, ${h.tmpFreeGB} GB free for jobs in memory`);

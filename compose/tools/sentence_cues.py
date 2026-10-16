@@ -5,13 +5,13 @@ Why: a narrator must never be interrupted or hurried inside a sentence. Cue word
 the picture fight over timing (the voice stops, or the picture races). So for every screen scene:
   - only the FIRST beat of each sentence is kept (a sentence = text up to . ? !); its clip time is where that sentence starts on screen;
   - the picture speed for a sentence is the footage between its cue and the next cue divided by the sentence's spoken length,
-    held between 1x and 5x (a scene may raise the cap with `maxSpeed`): slower footage is held on its last frame while the sentence finishes, faster footage runs at 5x and the
+    held between 1x and 3x (a scene may change the cap with `maxSpeed`; keep option-heavy screens at 2x or less): slower footage is held on its last frame while the sentence finishes, faster footage runs at 5x and the
     NEXT sentence waits until the picture has shown it (pacing "voice": a short gap, then the next sentence);
   - callouts and highlights tied to a recorded mark (`focus`) appear when that mark is on screen, not on a word.
 Needs `"pacing": "voice"` in the storyboard (this tool sets it). Safe to run again."""
 import json, re, sys
 
-MAXR = 5.0
+MAXR = 3.0
 norm = lambda t: re.sub(r'[^a-z0-9_]', '', t.lower())
 
 def main(sb_path, blocks_path, clips_path):

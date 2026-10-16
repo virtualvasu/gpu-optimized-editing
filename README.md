@@ -174,7 +174,7 @@ scene's `endV` frame).
 ### Pacing: voice-first (no hiccups)
 
 Set `"pacing": "voice"` in a storyboard. A narration sentence is then always spoken in one go: the picture is sped up (never
-past about 5x) or held to fit it, and the NEXT sentence starts only after the picture has shown what the previous one said, plus a
+past about 3x; steps a newcomer must follow stay at 2x or less) or held to fit it, and the NEXT sentence starts only after the picture has shown what the previous one said, plus a
 0.55 s gap. Cue the picture at sentence starts only: `vep cues <ep>` keeps the first beat of each sentence, snaps it to the
 sentence's first word and sets each sentence's picture speed from the footage it must show (callouts and highlights tied to a
 recorded mark appear when the mark is on screen). `vep check <ep>` packs and verifies: no sentence cut, gaps between sentences,

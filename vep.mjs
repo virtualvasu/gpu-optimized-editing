@@ -40,6 +40,7 @@ const HELP = `vep <command> [episode] ...      (episode = its folder name or a p
   list                          episodes of this project and what each one has
   new <name>                    start an episode folder (SCRIPT.md, narration.json, storyboard.json, clips/)
   voice <ep> [block ...]        synthesize narration.json (cached per block; FORCE=1 to redo, REALIGN=1 to re-time only)
+  status <ep> <value> [field]   set the episode's cell in the Google tracker (default column Status), e.g. vep status ep36 Posted  (video.json "tracker")
   upload <ep>                   upload the approved FINAL video to the project's Google Drive folder (video.json "upload"; only after the owner approves it)
   check <ep>                    pack, then check: sentences never cut, gaps between sentences, picture speeds, captions inside the voice
   cues <ep>                     one picture cue per sentence + automatic picture speed (voice-first pacing; run after voice and prep)
@@ -259,6 +260,17 @@ const commands = {
   voice(P, ep, ...only) {
     const E = findEpisode(P, ep);
     run('python3', [path.join(COMPOSE, 'tools/voice.py'), path.join(E.dir, 'narration.json'), path.join(E.art, 'voice'), ...only], { env: { ...process.env, VEP_VOICE: JSON.stringify(P.cfg.voice || {}) } });
+  },
+  async status(P, ep, value, field) {
+    const E = findEpisode(P, ep), t = P.cfg.tracker, num = /^ep(\d+)/i.exec(E.name)?.[1];
+    if (!t || !t.url) die('no tracker: add  "tracker": { "url": "<Apps Script web app url>" }  to video.json (script: 50-video-series/tracker-apps-script.gs)');
+    if (!num || !value) die('vep status <ep> <value> [column]   e.g. vep status ep36 Posted');
+    const tokenFile = (t.tokenFile || '~/.config/phinite/tracker.token').replace(/^~/, process.env.HOME);
+    if (!fs.existsSync(tokenFile)) die(`token file missing: ${tokenFile}`);
+    const r = await fetch(t.url, { method: 'POST', headers: { 'content-type': 'text/plain' }, body: JSON.stringify({ token: fs.readFileSync(tokenFile, 'utf8').trim(), ep: +num, value, ...(field ? { field } : {}) }) });
+    const text = await r.text(); let j; try { j = JSON.parse(text); } catch { die(`unexpected reply from the tracker script (${r.status}): ${text.slice(0, 200)}`); }
+    if (!j.ok) die(`tracker: ${j.error}`);
+    console.log(`tracker: Ep ${j.ep} ${j.field}: "${j.before}" → "${j.after}"`);
   },
   upload(P, ep, ...flags) {
     const E = findEpisode(P, ep), u = P.cfg.upload;

@@ -189,13 +189,6 @@ different scenes; never split mid-sentence.
 `output/<project>/<ep>-FINAL.mp4` into that folder, named from the episode's one-line `TITLE` file (else the folder name);
 `--all` also uploads the captions and thumbnail. Run it only after the owner has approved the video as final.
 
-### Updating the Google tracker without opening it
-
-Organisations that cannot expose a web app use a queue instead: `vep status <ep> <value> [column]` appends an entry to
-`tracker-updates.json` in the project's Drive folder (`video.json` → `tracker`: `remote`, `folderId`, `file`), and a script bound
-to the sheet (`50-video-series/tracker-sync.gs`, one-time setup: paste, run `install`) applies the queue to the Video Catalog every
-minute and marks each entry `applied` (with the old value) or `error`; `vep status` waits and prints the result.
-
 ### clips
 
 `episodes/<ep>/clips/NN-name.mp4`, any resolution with a 16:9 picture (scaled to the theme window). Optional

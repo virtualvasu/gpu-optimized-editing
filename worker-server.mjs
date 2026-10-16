@@ -27,6 +27,16 @@ const RESULT_TTL = 60 * 60 * 1000;   // an uncollected result is deleted after a
 const TASKS = ['scale', 'render', 'frames'];
 if (!TOKEN || TOKEN.length < 16) { console.error('set VEP_WORKER_TOKEN (16+ characters; the same value goes in the laptop\'s .env as worker_token)'); process.exit(1); }
 
+/** a fingerprint of the engine files that shape a render (the worker must run the same engine as the machine that packs the job) */
+function engineRev(root) {
+  const h = crypto.createHash('sha1'), files = [];
+  const walk = (d) => { for (const e of fs.readdirSync(d, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) { const p = path.join(d, e.name); if (e.isDirectory()) { if (e.name !== 'node_modules') walk(p); } else files.push(p); } };
+  walk(path.join(root, 'compose', 'src'));
+  for (const f of ['compose/package.json', 'compose/webpack-override.cjs', 'render-job.mjs', 'worker.mjs']) files.push(path.join(root, f));
+  for (const f of files) { h.update(path.relative(root, f)); h.update(fs.readFileSync(f)); }
+  return h.digest('hex').slice(0, 12);
+}
+const REV = engineRev(HERE);
 const freeBytes = (dir) => { try { const s = fs.statfsSync(dir); return s.bavail * s.bsize; } catch { return 0; } };
 const RAM = process.env.VEP_WORKER_TMP || (fs.existsSync('/dev/shm') ? '/dev/shm' : os.tmpdir());
 /** RAM when the job fits with room to spare (inputs + bundle copy + raw and final video), else the disk temp folder */
@@ -105,7 +115,7 @@ function result(id, j, res) {
 http.createServer((req, res) => {
   if (!authorized(req)) return json(res, 401, { error: 'unauthorized' });
   const url = new URL(req.url, 'http://x'), [, root, id, sub] = url.pathname.split('/');
-  if (req.method === 'GET' && root === 'health') return json(res, 200, { ok: true, busy: [...jobs.values()].some((j) => j.state === 'running'), cpus: os.cpus().length, gpu, ffmpeg, tmpFreeGB: +(freeBytes(RAM) / 1e9).toFixed(1) });
+  if (req.method === 'GET' && root === 'health') return json(res, 200, { ok: true, busy: [...jobs.values()].some((j) => j.state === 'running'), cpus: os.cpus().length, gpu, ffmpeg, rev: REV, tmpFreeGB: +(freeBytes(RAM) / 1e9).toFixed(1) });
   if (root !== 'jobs') return json(res, 404, { error: 'not found' });
   if (req.method === 'POST' && !id) {
     const task = url.searchParams.get('task');
@@ -119,7 +129,7 @@ http.createServer((req, res) => {
   if (req.method === 'GET' && sub === 'result') return result(id, j, res);
   if (req.method === 'DELETE' && !sub) { drop(id); return json(res, 200, { ok: true }); }
   json(res, 404, { error: 'not found' });
-}).listen(PORT, BIND, () => console.log(`vep worker on ${BIND}:${PORT}, ${os.cpus().length} cpus${gpu ? ', ' + gpu : ''}, jobs in ${RAM} (deleted after collection)${ffmpeg ? '' : '\nffmpeg/ffprobe missing: sudo apt install ffmpeg'}`));
+}).listen(PORT, BIND, () => console.log(`vep worker (engine ${REV}) on ${BIND}:${PORT}, ${os.cpus().length} cpus${gpu ? ', ' + gpu : ''}, jobs in ${RAM} (deleted after collection)${ffmpeg ? '' : '\nffmpeg/ffprobe missing: sudo apt install ffmpeg'}`));
 
 // stopping the server (Ctrl+C in tmux) stops and deletes every job; anything left is cleared at the next start
 for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => {

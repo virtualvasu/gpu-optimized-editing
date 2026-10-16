@@ -9,6 +9,7 @@ import { execFileSync, spawn, spawnSync } from 'child_process';
 import { createRequire } from 'module';
 import { Readable } from 'stream';
 import { pipeline } from 'stream/promises';
+import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 
@@ -18,6 +19,16 @@ const COMPOSE = path.join(HERE, 'compose');
 // .env next to this file: API keys for the voice, plus `worker=http://host:8787` and `worker_token=…` for the render machine
 const ENV = Object.fromEntries((fs.existsSync(path.join(HERE, '.env')) ? fs.readFileSync(path.join(HERE, '.env'), 'utf8') : '').split('\n')
   .map((l) => l.match(/^\s*([\w.-]+)\s*=\s*(.*?)\s*$/)).filter(Boolean).map((m) => [m[1], m[2].replace(/^["']|["']$/g, '')]));
+
+/** a fingerprint of the engine files that shape a render (the worker must run the same engine as the machine that packs the job) */
+function engineRev(root) {
+  const h = crypto.createHash('sha1'), files = [];
+  const walk = (d) => { for (const e of fs.readdirSync(d, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) { const p = path.join(d, e.name); if (e.isDirectory()) { if (e.name !== 'node_modules') walk(p); } else files.push(p); } };
+  walk(path.join(root, 'compose', 'src'));
+  for (const f of ['compose/package.json', 'compose/webpack-override.cjs', 'render-job.mjs', 'worker.mjs']) files.push(path.join(root, f));
+  for (const f of files) { h.update(path.relative(root, f)); h.update(fs.readFileSync(f)); }
+  return h.digest('hex').slice(0, 12);
+}
 const ARGV = process.argv.slice(2);
 const takeFlag = (k, withValue) => { const i = ARGV.indexOf(k); if (i < 0) return undefined; return withValue ? ARGV.splice(i, 2)[1] : (ARGV.splice(i, 1), true); };
 const LOCAL = takeFlag('--local'), ON = takeFlag('--on', true);
@@ -165,6 +176,8 @@ async function remote(task, inDir, files, outDir, opts) {
       } catch (e) { if (i >= tries) die(`worker ${base} unreachable: ${e.cause?.code || e.message} (network or VPN: is this machine on the network that reaches it?)`); await sleep(3000); }
     }
   };
+  const health = await (await call('/health', {}, 3)).json(), mine = engineRev(HERE);
+  if (health.rev !== mine) die(`the render machine runs a different engine (${health.rev || 'old version'}, here ${mine}).\n  On it: cd ~/video-editing-pipeline && git pull && (cd compose && npm ci), then restart worker-server.mjs (tmux attach -t vep, Ctrl+c, start it again).`);
   const size = +execFileSync('du', ['-sbcL', ...files], { cwd: inDir }).toString().trim().split('\n').pop().split('\t')[0];
   console.log(`${task}: sending ${(size / 1e6).toFixed(0)} MB to ${base}`);
   const tar = spawn('tar', ['-chf', '-', ...files], { cwd: inDir, stdio: ['ignore', 'pipe', 'inherit'] });
@@ -316,7 +329,7 @@ const commands = {
     const r = await fetch(WORKER.replace(/\/+$/, '') + '/health', { headers: { authorization: `Bearer ${WORKER_TOKEN}` } }).catch((e) => die(`${WORKER} unreachable: ${e.cause?.code || e.message} (network or VPN: is this machine on the network that reaches it?)`));
     if (!r.ok) die(`${WORKER}: ${r.status} ${r.statusText}`);
     const h = await r.json();
-    console.log(`${WORKER}: ${h.busy ? 'busy' : 'idle'}, ${h.cpus} cpus, ${h.gpu || 'no GPU found'}, ${h.tmpFreeGB} GB free for jobs in memory`);
+    console.log(`${WORKER}: ${h.busy ? 'busy' : 'idle'}, ${h.cpus} cpus, ${h.gpu || 'no GPU found'}, ${h.tmpFreeGB} GB free for jobs in memory, engine ${h.rev || 'old'} (here ${engineRev(HERE)}${h.rev === engineRev(HERE) ? ', same' : ': UPDATE IT'})`);
     if (h.ffmpeg === false) console.log('  ffmpeg/ffprobe are missing there: sudo apt install ffmpeg, then restart the worker');
   },
 };

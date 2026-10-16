@@ -171,6 +171,17 @@ Screen overlays for reading details without zooming (every time is `v` (clip tim
 `thumb`: `{ eyebrow, line1, line2, sub, clip, v }`, each optional (defaults: the title scene's text and the first screen
 scene's `endV` frame).
 
+### Pacing: voice-first (no hiccups)
+
+Set `"pacing": "voice"` in a storyboard. A narration sentence is then always spoken in one go: the picture is sped up (never
+past about 5x) or held to fit it, and the NEXT sentence starts only after the picture has shown what the previous one said, plus a
+0.55 s gap. Cue the picture at sentence starts only: `vep cues <ep>` keeps the first beat of each sentence, snaps it to the
+sentence's first word and sets each sentence's picture speed from the footage it must show (callouts and highlights tied to a
+recorded mark appear when the mark is on screen). `vep check <ep>` packs and verifies: no sentence cut, gaps between sentences,
+time above 8x, every caption inside the voice. The old `"pacing": "picture"` (default, for POC storyboards) lets the voice wait
+for the screen even inside a sentence. `vep split` cuts a block between two sentences (from the paid audio) when they must sit on
+different scenes; never split mid-sentence.
+
 ### clips
 
 `episodes/<ep>/clips/NN-name.mp4`, any resolution with a 16:9 picture (scaled to the theme window). Optional

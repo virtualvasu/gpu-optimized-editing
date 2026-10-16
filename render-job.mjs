@@ -13,7 +13,7 @@ const HERE = path.dirname(fs.realpathSync(new URL(import.meta.url).pathname));
 const require = createRequire(path.join(HERE, 'compose', 'package.json'));
 
 /** renders job/ into outDir; returns the paths it wrote */
-export async function renderJob(jobDir, outDir, { concurrency = os.cpus().length, gl = null, frames = null, log = console.log, serveUrl = path.join(jobDir, 'bundle'), name = null } = {}) {
+export async function renderJob(jobDir, outDir, { concurrency = os.cpus().length, gl = null, frames = null, log = console.log, serveUrl = path.join(jobDir, 'bundle'), name = null, crf = 16, imageFormat = 'jpeg', x264Preset = null } = {}) {
   const { selectComposition, renderMedia } = require('@remotion/renderer');
   const job = { name: name ?? JSON.parse(fs.readFileSync(path.join(jobDir, 'job.json'), 'utf8')).name };
   const inputProps = JSON.parse(fs.readFileSync(path.join(jobDir, 'props.json'), 'utf8'));
@@ -26,11 +26,11 @@ export async function renderJob(jobDir, outDir, { concurrency = os.cpus().length
   let last = -1;
   await renderMedia({
     serveUrl, composition, inputProps, chromiumOptions, concurrency, outputLocation: raw, overwrite: true,
-    frameRange: frames, codec: 'h264', crf: 16, pixelFormat: 'yuv420p', imageFormat: 'jpeg', jpegQuality: 95,
+    frameRange: frames, codec: 'h264', crf, pixelFormat: 'yuv420p', imageFormat, ...(imageFormat === 'jpeg' ? { jpegQuality: 95 } : {}), ...(x264Preset ? { x264Preset } : {}),
     onProgress: ({ progress }) => { const p = Math.floor(progress * 20); if (p !== last) { last = p; log(`  ${p * 5}%`); } },
   });
   // loudness to -14 LUFS for YouTube/LinkedIn; the picture is copied untouched
-  const r = spawnSync('ffmpeg', ['-loglevel', 'error', '-y', '-i', raw, '-c:v', 'copy', '-af', 'loudnorm=I=-14:TP=-1.5:LRA=8', '-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-movflags', '+faststart', final], { stdio: 'inherit' });
+  const r = spawnSync('ffmpeg', ['-loglevel', 'error', '-y', '-i', raw, '-c:v', 'copy', '-af', 'loudnorm=I=-14:TP=-1.5:LRA=8', '-c:a', 'aac', '-b:a', '256k', '-ar', '48000', '-movflags', '+faststart', final], { stdio: 'inherit' });
   if (r.status !== 0) throw new Error(r.error?.code === 'ENOENT' ? 'ffmpeg is not installed on this machine (sudo apt install ffmpeg)' : 'ffmpeg loudnorm failed');
   fs.unlinkSync(raw);
   fs.copyFileSync(path.join(jobDir, 'captions.srt'), srt);

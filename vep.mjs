@@ -29,6 +29,9 @@ const HELP = `vep <command> [episode] ...      (episode = its folder name or a p
   list                          episodes of this project and what each one has
   new <name>                    start an episode folder (SCRIPT.md, narration.json, storyboard.json, clips/)
   voice <ep> [block ...]        synthesize narration.json (cached per block; FORCE=1 to redo, REALIGN=1 to re-time only)
+  check <ep>                    pack, then check: sentences never cut, gaps between sentences, picture speeds, captions inside the voice
+  cues <ep>                     one picture cue per sentence + automatic picture speed (voice-first pacing; run after voice and prep)
+  split <ep> <block> "<phrase>" ...  cut a narration block at the given words (from the paid audio, no new synthesis)
   prep <ep>                     scale the clips (<episode>/clips/*.mp4, from any recorder) to the theme's window size + read marks  (heavy)
   dry <ep>                      print the timeline (fast; catches bad words and marks before a render)
   still <ep> <frame> [...]      render single frames to artifacts/.../stills/  (heavy)
@@ -243,12 +246,26 @@ const commands = {
     const E = findEpisode(P, ep);
     run('python3', [path.join(COMPOSE, 'tools/voice.py'), path.join(E.dir, 'narration.json'), path.join(E.art, 'voice'), ...only], { env: { ...process.env, VEP_VOICE: JSON.stringify(P.cfg.voice || {}) } });
   },
+  async check(P, ep) {
+    const job = await pack(P, findEpisode(P, ep));
+    const r = spawnSync('node', [path.join(COMPOSE, 'tools/check_timeline.mjs'), job], { stdio: 'inherit' });
+    process.exit(r.status ?? 1);
+  },
+  cues(P, ep) {
+    const E = findEpisode(P, ep);
+    run('python3', [path.join(COMPOSE, 'tools/sentence_cues.py'), path.join(E.dir, 'storyboard.json'), path.join(E.art, 'voice', 'blocks.json'), path.join(E.art, 'scaled', 'clips.json')]);
+  },
+  split(P, ep, block, ...phrases) {
+    const E = findEpisode(P, ep);
+    if (!block || !phrases.length) die('vep split <ep> <block> "<phrase that starts part 2>" [...]');
+    run('python3', [path.join(COMPOSE, 'tools/split_block.py'), path.join(E.dir, 'narration.json'), path.join(E.art, 'voice'), block, ...phrases]);
+  },
   async prep(P, ep) {
     const E = findEpisode(P, ep), win = projectTheme(P).window, src = path.join(E.dir, 'clips'), out = path.join(E.art, 'scaled');
     const clips = fs.existsSync(src) ? fs.readdirSync(src).filter((x) => /^\d.*\.mp4$/.test(x)).sort() : [];
     if (!clips.length) die(`no clips in ${src} (NN-name.mp4, optional NN-name.actions.json marks)`);
     const tmp = path.join(E.art, '.scale');
-    await heavy('scale', src, clips, tmp, { w: win.w, h: win.h });   // the old scaled clips stay until the new ones are all back
+    await heavy('scale', src, clips, tmp, { w: win.w, h: win.h, ...(P.cfg.scale || {}) });   // the old scaled clips stay until the new ones are all back
     const durations = readJSON(path.join(tmp, 'durations.json')), info = {};
     fs.unlinkSync(path.join(tmp, 'durations.json'));
     fs.rmSync(out, { recursive: true, force: true });
@@ -287,7 +304,7 @@ const commands = {
     const frames = opt('--frames'), gl = opt('--gl') || (WORKER && ENV.worker_gl) || null;
     const job = await pack(P, E), tmp = path.join(E.art, '.render');
     const files = ['public', 'props.json', 'captions.srt', ...(fs.existsSync(path.join(job, 'scenes')) ? ['scenes'] : [])];
-    await heavy('render', job, files, tmp, { concurrency: opt('--concurrency') ? +opt('--concurrency') : undefined, gl, frames: frames ? frames.split('-').map(Number) : null });
+    await heavy('render', job, files, tmp, { ...(P.cfg.render || {}), concurrency: opt('--concurrency') ? +opt('--concurrency') : undefined, gl, frames: frames ? frames.split('-').map(Number) : null });
     const out = frames ? path.join(E.art, 'test-slice') : E.out;   // a slice never replaces a FINAL
     take(tmp, 'video-FINAL.mp4', path.join(out, `${E.name}-FINAL.mp4`));
     take(tmp, 'video.srt', path.join(out, `${E.name}.srt`));

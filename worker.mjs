@@ -23,12 +23,12 @@ const COMPOSE = path.join(HERE, 'compose');
 const require = createRequire(path.join(COMPOSE, 'package.json'));
 
 /** recordings → clips at the theme window size (lanczos, light sharpen, CRF 12) + their durations */
-export async function scale(inDir, outDir, { w, h }, log = console.log) {
+export async function scale(inDir, outDir, { w, h, crf = 12, preset = 'medium' }, log = console.log) {
   fs.mkdirSync(outDir, { recursive: true });
   const durations = {};
   for (const f of fs.readdirSync(inDir).filter((x) => /^\d.*\.mp4$/.test(x)).sort()) {
     execFileSync('ffmpeg', ['-loglevel', 'error', '-y', '-i', path.join(inDir, f), '-vf', `scale=${w}:${h}:flags=lanczos+accurate_rnd+full_chroma_int,unsharp=5:5:0.35:5:5:0.0`,
-      '-an', '-r', '30', '-c:v', 'libx264', '-preset', 'medium', '-crf', '12', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', path.join(outDir, f)], { stdio: ['ignore', 'ignore', 'inherit'] });
+      '-an', '-r', '30', '-c:v', 'libx264', '-preset', preset, '-crf', String(crf), '-pix_fmt', 'yuv420p', '-movflags', '+faststart', path.join(outDir, f)], { stdio: ['ignore', 'ignore', 'inherit'] });
     durations[f.replace(/\.mp4$/, '')] = +parseFloat(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', path.join(outDir, f)]).toString()).toFixed(3);
     log(`scaled ${f}`);
   }
@@ -45,9 +45,9 @@ async function bundleJob(jobDir, tmp) {
     publicDir: path.join(jobDir, 'public'), outDir: path.join(tmp, 'bundle'), enableCaching: false });
 }
 
-export async function render(jobDir, outDir, { concurrency, gl = null, frames = null } = {}, tmp, log = console.log) {
+export async function render(jobDir, outDir, { concurrency, gl = null, frames = null, crf, imageFormat, x264Preset } = {}, tmp, log = console.log) {
   const serveUrl = await bundleJob(jobDir, tmp);
-  await renderJob(jobDir, outDir, { serveUrl, name: 'video', concurrency: concurrency || os.cpus().length, gl, frames, log });
+  await renderJob(jobDir, outDir, { serveUrl, name: 'video', concurrency: concurrency || os.cpus().length, gl, frames, log, ...(crf != null ? { crf } : {}), ...(imageFormat ? { imageFormat } : {}), ...(x264Preset ? { x264Preset } : {}) });
 }
 
 export async function stills(jobDir, outDir, { frames = [], thumb = false, gl = null } = {}, tmp, log = console.log) {

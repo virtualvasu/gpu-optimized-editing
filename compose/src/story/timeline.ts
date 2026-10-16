@@ -4,11 +4,14 @@ import { Blk, Phrase, Seg, schedule, wordTime } from '../fit';
 import { C } from '../theme';
 
 export type ClipInfo = { dur: number; marks: Record<string, number>; boxes?: Record<string, [number, number, number, number]> };
-export type Storyboard = { labels: string[]; scenes: any[]; music?: number; thumb?: any };
+export type Storyboard = { labels: string[]; scenes: any[]; music?: number; thumb?: any; pacing?: 'voice' | 'picture' };
 export type Timed = { id: string; type: string; start: number; len: number; phrases: Phrase[]; segs: Seg[] | null; [k: string]: any };
 
 const OVERLAP = 0.7, GAP = 0.5;
-const FREE = { pause: 99, endHold: 99, breathe: true };   // picture-led: the screen may outlast the sentence
+// Pacing (storyboard `pacing`): 'voice' = a sentence is always spoken in one go (the picture is sped up or held to fit it); the
+// NEXT sentence starts only when the picture has shown what the last one said, plus a short gap (0.55 s). 'picture' = the voice
+// also waits inside a sentence for the screen (hiccups). Cue the picture at sentence starts only. 'voice' is what tutorials use.
+const PACING: Record<string, any> = { voice: { pause: 99, endHold: 99, breathe: false, gap: 0.55 }, picture: { pause: 99, endHold: 99, breathe: true } };
 
 /** A clip time in a storyboard is a number of seconds, or "mark:<label>[+/-seconds]" taken from the recorder's marks. */
 export const rv = (x: any, info: ClipInfo, clip: string): number => {
@@ -51,7 +54,7 @@ export function buildTimeline(sb: Storyboard, rawBlocks: Record<string, any>, cl
       const R = (x: any) => rv(x, info, sc.clip);
       const beats = sc.beats.map((b: any) => ({ ...b, v: R(b.v), waits: b.waits?.map(([a, z, r]: any) => [R(a), R(z), r]) }));
       const endWaits = sc.endWaits?.map(([a, z, r]: any) => [R(a), R(z), r]);
-      const r = schedule(beats, BLOCKS, sc.lead ?? 0.6, sc.tail ?? 1.2, info.dur, R(sc.endV), sc.endRate ?? 1.2, { ...FREE, endWaits });
+      const r = schedule(beats, BLOCKS, sc.lead ?? 0.6, sc.tail ?? 1.2, info.dur, R(sc.endV), sc.endRate ?? 1.2, { ...(PACING[sb.pacing ?? 'picture'] ?? PACING.picture), endWaits });
       len = r.len; segs = r.segs; phrases = r.phrases;
       sc.zv = sc.zv?.map((k: any) => ({ ...k, v: R(k.v) }));
       // overlays: v (clip time) or b+w (a spoken word); a callout may name a recorded `focus` box (its time defaults to that mark);

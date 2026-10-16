@@ -29,8 +29,8 @@ export const cutTime = (b: Blk, needle: string, nth = 0): number => {
 const endsSentence = (b: Blk, a1: number) => { const w = [...b.words].reverse().find((x) => x.s < a1); return !!w && /[.?!:]$/.test(w.t); };
 
 export function schedule(beats: Beat[], blocks: Record<string, Blk>, lead: number, tail: number, clipDur: number, endV: number,
-  endRate = 1.5, o: { pause?: number; endHold?: number; a1End?: number; endWaits?: [number, number, number][]; breathe?: boolean } = {}) {
-  const MAXP = o.pause ?? 0.8, ENDH = o.endHold ?? 1.5;
+  endRate = 1.5, o: { pause?: number; endHold?: number; a1End?: number; endWaits?: [number, number, number][]; breathe?: boolean; gap?: number } = {}) {
+  const MAXP = o.pause ?? 0.8, ENDH = o.endHold ?? 1.5, GAP = o.gap ?? 0;   // GAP: the least silence after a sentence / block
   const segs: Seg[] = [], phrases: Phrase[] = [];
   const ph = beats.map((bt, i) => {
     const blk = blocks[bt.b], nx = beats[i + 1];
@@ -53,7 +53,7 @@ export function schedule(beats: Beat[], blocks: Record<string, Blk>, lead: numbe
     }
     const N = pieces.reduce((s, q) => s + (q.to - q.from) / q.r, 0);
     const dur = p.a1 - p.a0;
-    const D = p.kind === 'flow' ? (o.breathe ? Math.max(N, dur) : dur) : p.kind === 'sentence' ? Math.min(Math.max(N, dur), dur + MAXP) : Math.min(Math.max(N, dur + 0.3), dur + ENDH);
+    const D = p.kind === 'flow' ? (o.breathe ? Math.max(N, dur) : dur) : p.kind === 'sentence' ? Math.min(Math.max(N, dur + GAP), dur + MAXP) : Math.min(Math.max(N, dur + Math.max(GAP, 0.3)), dur + ENDH);
     const scale = N > 0 ? Math.min(D / N, 1.25) : 1;   // <1 speeds the picture up to fit the voice; >1 slows it gently, then holds
     let t = A;
     for (const q of pieces) { const d = ((q.to - q.from) / q.r) * scale; segs.push({ at: t, from: q.from, dur: d, rate: q.r / scale }); t += d; }

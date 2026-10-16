@@ -10,6 +10,7 @@ import { createRequire } from 'module';
 import { Readable } from 'stream';
 import { pipeline } from 'stream/promises';
 import crypto from 'crypto';
+import os from 'os';
 import fs from 'fs';
 import path from 'path';
 
@@ -40,7 +41,7 @@ const HELP = `vep <command> [episode] ...      (episode = its folder name or a p
   list                          episodes of this project and what each one has
   new <name>                    start an episode folder (SCRIPT.md, narration.json, storyboard.json, clips/)
   voice <ep> [block ...]        synthesize narration.json (cached per block; FORCE=1 to redo, REALIGN=1 to re-time only)
-  status <ep> <value> [field]   set the episode's cell in the Google tracker (default column Status), e.g. vep status ep36 Posted  (video.json "tracker")
+  status <ep> <value> [field]   set the episode's cell in the Google tracker (default column Status), e.g. vep status ep36 Posted  (video.json "tracker", Drive queue + sheet script)
   upload <ep>                   upload the approved FINAL video to the project's Google Drive folder (video.json "upload"; only after the owner approves it)
   check <ep>                    pack, then check: sentences never cut, gaps between sentences, picture speeds, captions inside the voice
   cues <ep>                     one picture cue per sentence + automatic picture speed (voice-first pacing; run after voice and prep)
@@ -263,14 +264,25 @@ const commands = {
   },
   async status(P, ep, value, field) {
     const E = findEpisode(P, ep), t = P.cfg.tracker, num = /^ep(\d+)/i.exec(E.name)?.[1];
-    if (!t || !t.url) die('no tracker: add  "tracker": { "url": "<Apps Script web app url>" }  to video.json (script: 50-video-series/tracker-apps-script.gs)');
+    if (!t || !t.folderId) die('no tracker: add  "tracker": { "remote": "gdrive", "folderId": "<Drive folder id>", "file": "tracker-updates.json" }  to video.json (and install 50-video-series/tracker-sync.gs in the sheet)');
     if (!num || !value) die('vep status <ep> <value> [column]   e.g. vep status ep36 Posted');
-    const tokenFile = (t.tokenFile || '~/.config/phinite/tracker.token').replace(/^~/, process.env.HOME);
-    if (!fs.existsSync(tokenFile)) die(`token file missing: ${tokenFile}`);
-    const r = await fetch(t.url, { method: 'POST', headers: { 'content-type': 'text/plain' }, body: JSON.stringify({ token: fs.readFileSync(tokenFile, 'utf8').trim(), ep: +num, value, ...(field ? { field } : {}) }) });
-    const text = await r.text(); let j; try { j = JSON.parse(text); } catch { die(`unexpected reply from the tracker script (${r.status}): ${text.slice(0, 200)}`); }
-    if (!j.ok) die(`tracker: ${j.error}`);
-    console.log(`tracker: Ep ${j.ep} ${j.field}: "${j.before}" → "${j.after}"`);
+    const file = t.file || 'tracker-updates.json', rc = (args, o = {}) => spawnSync('rclone', [...args, '--drive-root-folder-id', t.folderId], { encoding: 'utf8', ...o });
+    const read = () => { const r = rc(['cat', `${t.remote}:${file}`]); try { return r.status === 0 ? JSON.parse(r.stdout || '[]') : []; } catch { return []; } };
+    // the sheet's script fills in `applied` / `error` on each queued update; keep its marks, add ours, write the file back
+    const list = read(), id = Date.now().toString(36);
+    list.push({ id, ep: +num, field: field || 'Status', value, requested: new Date().toISOString() });
+    const tmp = path.join(os.tmpdir(), `vep-${process.pid}-${file}`);
+    fs.writeFileSync(tmp, JSON.stringify(list, null, 1));
+    const up = rc(['copyto', tmp, `${t.remote}:${file}`], { stdio: 'inherit' }); fs.unlinkSync(tmp);
+    if (up.status !== 0) die('could not write the tracker queue to Drive');
+    console.log(`queued: Ep ${num} ${field || 'Status'} → "${value}"; waiting for the sheet to apply it (it checks every minute)…`);
+    for (let i = 0; i < 16; i++) {
+      await sleep(15000);
+      const u = read().find((x) => x.id === id);
+      if (u?.applied) { console.log(`tracker: Ep ${u.ep} ${u.field}: "${u.applied.before}" → "${u.applied.after}"`); return; }
+      if (u?.error) die(`tracker: ${u.error}`);
+    }
+    console.log('still queued after 4 minutes: install tracker-sync.gs in the sheet (Extensions > Apps Script > run `install`); it applies the update as soon as it runs.');
   },
   upload(P, ep, ...flags) {
     const E = findEpisode(P, ep), u = P.cfg.upload;

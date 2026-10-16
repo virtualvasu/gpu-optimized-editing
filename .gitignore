@@ -1,0 +1,7 @@
+# the engine only: no keys, no episode material, nothing generated
+.env
+artifacts/
+output/
+node_modules/
+__pycache__/
+compose/.timeline-*.mjs

@@ -182,6 +182,13 @@ time above 8x, every caption inside the voice. The old `"pacing": "picture"` (de
 for the screen even inside a sentence. `vep split` cuts a block between two sentences (from the paid audio) when they must sit on
 different scenes; never split mid-sentence.
 
+### Delivering a finished video (Google Drive)
+
+`video.json` may hold `"upload": { "remote": "gdrive", "folderId": "<Drive folder id>" }` (an rclone remote set up once with
+`rclone config`, scope `drive.file`: rclone can only see what it creates). `vep upload <ep>` then copies
+`output/<project>/<ep>-FINAL.mp4` into that folder, named from the episode's one-line `TITLE` file (else the folder name);
+`--all` also uploads the captions and thumbnail. Run it only after the owner has approved the video as final.
+
 ### clips
 
 `episodes/<ep>/clips/NN-name.mp4`, any resolution with a 16:9 picture (scaled to the theme window). Optional

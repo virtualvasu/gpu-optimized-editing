@@ -40,6 +40,7 @@ const HELP = `vep <command> [episode] ...      (episode = its folder name or a p
   list                          episodes of this project and what each one has
   new <name>                    start an episode folder (SCRIPT.md, narration.json, storyboard.json, clips/)
   voice <ep> [block ...]        synthesize narration.json (cached per block; FORCE=1 to redo, REALIGN=1 to re-time only)
+  upload <ep>                   upload the approved FINAL video to the project's Google Drive folder (video.json "upload"; only after the owner approves it)
   check <ep>                    pack, then check: sentences never cut, gaps between sentences, picture speeds, captions inside the voice
   cues <ep>                     one picture cue per sentence + automatic picture speed (voice-first pacing; run after voice and prep)
   split <ep> <block> "<phrase>" ...  cut a narration block at the given words (from the paid audio, no new synthesis)
@@ -258,6 +259,20 @@ const commands = {
   voice(P, ep, ...only) {
     const E = findEpisode(P, ep);
     run('python3', [path.join(COMPOSE, 'tools/voice.py'), path.join(E.dir, 'narration.json'), path.join(E.art, 'voice'), ...only], { env: { ...process.env, VEP_VOICE: JSON.stringify(P.cfg.voice || {}) } });
+  },
+  upload(P, ep, ...flags) {
+    const E = findEpisode(P, ep), u = P.cfg.upload;
+    if (!u || !u.remote || !u.folderId) die('no upload target: add  "upload": { "remote": "gdrive", "folderId": "<Drive folder id>" }  to video.json (rclone remote set up with `rclone config`)');
+    const final = path.join(E.out, `${E.name}-FINAL.mp4`);
+    if (!fs.existsSync(final)) die(`no final video yet: ${final} (vep render ${E.name})`);
+    const titleFile = path.join(E.dir, 'TITLE'), title = fs.existsSync(titleFile) ? fs.readFileSync(titleFile, 'utf8').trim() : E.name;
+    const files = [[final, `${title}.mp4`]];
+    if (flags.includes('--all')) for (const [src, dst] of [[`${E.name}.srt`, `${title}.srt`], [`${E.name}-thumb.png`, `${title} (thumbnail).png`]]) if (fs.existsSync(path.join(E.out, src))) files.push([path.join(E.out, src), dst]);
+    for (const [src, dst] of files) {
+      console.log(`uploading ${path.basename(src)} → ${u.remote}:${dst}`);
+      run('rclone', ['copyto', src, `${u.remote}:${dst}`, '--drive-root-folder-id', u.folderId, '--drive-chunk-size', '64M', '-v', '--stats', '20s']);
+    }
+    run('rclone', ['lsl', `${u.remote}:`, '--drive-root-folder-id', u.folderId]);
   },
   async check(P, ep) {
     const job = await pack(P, findEpisode(P, ep));

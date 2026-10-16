@@ -53,6 +53,7 @@ setInterval(() => {
   for (const d of pending) wipe(d);
 }, 60 * 1000).unref();
 
+const ffmpeg = ['ffmpeg', 'ffprobe'].every((b) => { try { execFileSync(b, ['-version'], { stdio: 'ignore' }); return true; } catch { return false; } });
 const gpu = (() => { try { return execFileSync('nvidia-smi', ['--query-gpu=name', '--format=csv,noheader']).toString().trim(); } catch { return null; } })();
 const authorized = (req) => { const a = Buffer.from(req.headers.authorization || ''), b = Buffer.from('Bearer ' + TOKEN); return a.length === b.length && crypto.timingSafeEqual(a, b); };
 const json = (res, code, body) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(body)); };
@@ -104,7 +105,7 @@ function result(id, j, res) {
 http.createServer((req, res) => {
   if (!authorized(req)) return json(res, 401, { error: 'unauthorized' });
   const url = new URL(req.url, 'http://x'), [, root, id, sub] = url.pathname.split('/');
-  if (req.method === 'GET' && root === 'health') return json(res, 200, { ok: true, busy: [...jobs.values()].some((j) => j.state === 'running'), cpus: os.cpus().length, gpu, tmpFreeGB: +(freeBytes(RAM) / 1e9).toFixed(1) });
+  if (req.method === 'GET' && root === 'health') return json(res, 200, { ok: true, busy: [...jobs.values()].some((j) => j.state === 'running'), cpus: os.cpus().length, gpu, ffmpeg, tmpFreeGB: +(freeBytes(RAM) / 1e9).toFixed(1) });
   if (root !== 'jobs') return json(res, 404, { error: 'not found' });
   if (req.method === 'POST' && !id) {
     const task = url.searchParams.get('task');
@@ -118,7 +119,7 @@ http.createServer((req, res) => {
   if (req.method === 'GET' && sub === 'result') return result(id, j, res);
   if (req.method === 'DELETE' && !sub) { drop(id); return json(res, 200, { ok: true }); }
   json(res, 404, { error: 'not found' });
-}).listen(PORT, BIND, () => console.log(`vep worker on ${BIND}:${PORT}, ${os.cpus().length} cpus${gpu ? ', ' + gpu : ''}, jobs in ${RAM} (deleted after collection)`));
+}).listen(PORT, BIND, () => console.log(`vep worker on ${BIND}:${PORT}, ${os.cpus().length} cpus${gpu ? ', ' + gpu : ''}, jobs in ${RAM} (deleted after collection)${ffmpeg ? '' : '\nffmpeg/ffprobe missing: sudo apt install ffmpeg'}`));
 
 // stopping the server (Ctrl+C in tmux) stops and deletes every job; anything left is cleared at the next start
 for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => {

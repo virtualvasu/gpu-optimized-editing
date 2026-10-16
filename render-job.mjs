@@ -31,7 +31,7 @@ export async function renderJob(jobDir, outDir, { concurrency = os.cpus().length
   });
   // loudness to -14 LUFS for YouTube/LinkedIn; the picture is copied untouched
   const r = spawnSync('ffmpeg', ['-loglevel', 'error', '-y', '-i', raw, '-c:v', 'copy', '-af', 'loudnorm=I=-14:TP=-1.5:LRA=8', '-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-movflags', '+faststart', final], { stdio: 'inherit' });
-  if (r.status !== 0) throw new Error('ffmpeg loudnorm failed');
+  if (r.status !== 0) throw new Error(r.error?.code === 'ENOENT' ? 'ffmpeg is not installed on this machine (sudo apt install ffmpeg)' : 'ffmpeg loudnorm failed');
   fs.unlinkSync(raw);
   fs.copyFileSync(path.join(jobDir, 'captions.srt'), srt);
   return { final, srt };

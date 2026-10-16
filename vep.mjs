@@ -300,6 +300,7 @@ const commands = {
     if (!r.ok) die(`${WORKER}: ${r.status} ${r.statusText}`);
     const h = await r.json();
     console.log(`${WORKER}: ${h.busy ? 'busy' : 'idle'}, ${h.cpus} cpus, ${h.gpu || 'no GPU found'}, ${h.tmpFreeGB} GB free for jobs in memory`);
+    if (h.ffmpeg === false) console.log('  ffmpeg/ffprobe are missing there: sudo apt install ffmpeg, then restart the worker');
   },
 };
 

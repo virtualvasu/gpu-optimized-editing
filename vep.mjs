@@ -46,6 +46,7 @@ const HELP = `vep <command> [episode] ...      (episode = its folder name or a p
   split <ep> <block> "<phrase>" ...  cut a narration block at the given words (from the paid audio, no new synthesis)
   prep <ep>                     scale the clips (<episode>/clips/*.mp4, from any recorder) to the theme's window size + read marks  (heavy)
   dry <ep>                      print the timeline (fast; catches bad words and marks before a render)
+  boxes <ep>                    JSON: every box with the clip frame it lands on (tools/boxcheck.py checks that something is under it)
   hl <ep>                       print every highlight box with the seconds it stays on screen (storyboard dur vs. the real visible time)
   still <ep> <frame> [...]      render single frames to artifacts/.../stills/  (heavy)
   thumb <ep>                    render the thumbnail to output/<project>/<ep>-thumb.png  (heavy)
@@ -225,6 +226,7 @@ async function timeline(P, E) {
         r.OV.push({ scene: sc.id, head: o.head, at: sc.start + o.at, dur: o.dur, text: said(o.at), lines: (o.lines || []).map((l) => ({ text: l.text, at: l.at != null ? sc.start + l.at : null, said: l.at != null ? said(l.at) : '' })) });
       }
       sc.hl?.forEach((h, i) => {
+        (r.BX = r.BX || []).push({ scene: sc.id, label: i, clip: sc.clip, at: sc.start + hs[i].at, clipT: m.clipTime(sc.segs, hs[i].at), markT: (() => { const raw = storyboard.scenes.find((q) => q.id === sc.id)?.hl?.[i]; const f = raw?.focus; return f != null ? (clips[sc.clip]?.marks?.[f] ?? null) : (h.v ?? null); })(), box: hs[i].box });
         const a = hs[i].at, ph = [...sc.phrases].filter((q) => q.A <= a + 0.05).pop();   // the sentence being spoken when the box lands
         const words = ph ? r.BLOCKS[ph.b].words.filter((w) => w.s >= ph.a0 - 0.06 && w.s < ph.a1 + 0.06) : [];
         const heard = words.filter((w) => ph.A + (w.s - ph.a0) <= a + 0.05).length;
@@ -328,6 +330,10 @@ const commands = {
     const { TIMELINE, TOTAL } = await timeline(P, findEpisode(P, ep));
     console.log('TOTAL', TOTAL.toFixed(1), 's =', Math.floor(TOTAL / 60) + ':' + String(Math.round(TOTAL % 60)).padStart(2, '0'), ` (${Math.round(TOTAL * 30)} frames)`);
     for (const s of TIMELINE) console.log(s.id.padEnd(10), s.type.padEnd(10), String(+s.start.toFixed(2)).padStart(7), String(+s.len.toFixed(2)).padStart(7));
+  },
+  async boxes(P, ep) {   // every box with the clip frame it sits on (for tools/boxcheck.py)
+    const { BX } = await timeline(P, findEpisode(P, ep));
+    console.log(JSON.stringify(BX));
   },
   async hl(P, ep) {
     const { HL } = await timeline(P, findEpisode(P, ep));

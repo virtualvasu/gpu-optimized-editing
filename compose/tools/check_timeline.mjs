@@ -40,6 +40,20 @@ for (const sc of t.TIMELINE) if (sc.segs) {
   const fast = sc.segs.filter((s) => !s.freeze && (s.rate || 1) > 3), ft = fast.reduce((a, s) => a + s.dur, 0);
   if (fast.length) console.log(`FAST ${sc.id}: ${ft.toFixed(1)}s of ${sc.len.toFixed(1)}s above 3x (max ${Math.max(...fast.map((s) => s.rate)).toFixed(1)}x)  [clip s: ${fast.map((s) => `${s.from.toFixed(1)}-${(s.from + s.dur * s.rate).toFixed(1)} at ${s.rate.toFixed(0)}x`).join(', ')}]`);
 }
+// DEAD AIR (owner, 2026-10-20): a stretch of more than 1.2 s with no voice AND a still picture (a frozen or held frame)
+{
+  let dead = 0;
+  for (const sc of t.TIMELINE) if (sc.segs) {
+    const voice = sc.phrases.map((p) => [p.A, p.A + (p.a1 - p.a0)]);
+    for (const g of sc.segs.filter((q) => q.freeze && q.dur > 1.2)) {
+      // cut the still stretch by the voice intervals that overlap it
+      let cur = g.at; const end = g.at + g.dur; const cover = voice.filter(([a, b]) => b > cur && a < end).sort((x, y) => x[0] - y[0]);
+      const gaps = []; for (const [a, b] of cover) { if (a - cur > 1.2) gaps.push([cur, a]); cur = Math.max(cur, b); } if (end - cur > 1.2) gaps.push([cur, end]);
+      for (const [a, b] of gaps) { dead++; console.log(`DEAD AIR  scene ${sc.id}: ${(sc.start + a).toFixed(1)}s-${(sc.start + b).toFixed(1)}s (${(b - a).toFixed(1)} s, still picture, no voice)`); }
+    }
+  }
+  console.log(`dead air stretches: ${dead}`);
+}
 const srt = fs.existsSync(path.join(job, 'captions.srt')) ? fs.readFileSync(path.join(job, 'captions.srt'), 'utf8') : '';
 const tsec = (x) => { const [h, mi, s] = x.split(':'); return +h * 3600 + +mi * 60 + +s.replace(',', '.'); };
 let off = 0, n = 0;

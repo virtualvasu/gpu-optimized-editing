@@ -85,7 +85,7 @@ export function buildTimeline(sb: Storyboard, rawBlocks: Record<string, any>, cl
         if (!box) throw new Error(`scene ${sc.id}: highlight "${h.focus}" has no box (record it with a focus step, or give "box")`);
         // a box tied to a word (b + w [+ n]) lands when the narrator says that word; with a mark (focus or v) as well it is never
         // shown before the picture has reached that mark, so it cannot sit on an element that is not on screen yet
-        if (h.b != null) return { b: h.b, w: h.w, n: h.n, off: h.off, dur: h.dur ?? 7, box, ...(h.focus != null || h.v != null ? { v: R(h.v ?? `mark:${h.focus}`) } : {}) };
+        if (h.b != null) return { b: h.b, w: h.w, n: h.n, off: h.off, dur: h.dur ?? 7, box, ...((h.focus != null || h.v != null) && !h.nomark ? { v: R(h.v ?? `mark:${h.focus}`) } : {}) };   // nomark: a static screen, timed by the word alone
         return { v: R(h.v ?? `mark:${h.focus}`), dur: h.dur ?? 3, box };
       });
     } else if (sc.blocks) {

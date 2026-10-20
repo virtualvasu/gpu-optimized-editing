@@ -29,7 +29,7 @@ export const cutTime = (b: Blk, needle: string, nth = 0): number => {
 const endsSentence = (b: Blk, a1: number) => { const w = [...b.words].reverse().find((x) => x.s < a1); return !!w && /[.?!:]$/.test(w.t); };
 
 export function schedule(beats: Beat[], blocks: Record<string, Blk>, lead: number, tail: number, clipDur: number, endV: number,
-  endRate = 1.5, o: { pause?: number; endHold?: number; a1End?: number; endWaits?: [number, number, number][]; breathe?: boolean; gap?: number } = {}) {
+  endRate = 1.5, o: { pause?: number; endHold?: number; a1End?: number; endWaits?: [number, number, number][]; breathe?: boolean; gap?: number; calm?: boolean; maxRate?: number; maxStep?: number } = {}) {
   const MAXP = o.pause ?? 0.8, ENDH = o.endHold ?? 1.5, GAP = o.gap ?? 0;   // GAP: the least silence after a sentence / block
   const segs: Seg[] = [], phrases: Phrase[] = [];
   const ph = beats.map((bt, i) => {
@@ -62,8 +62,9 @@ export function schedule(beats: Beat[], blocks: Record<string, Blk>, lead: numbe
       segs.push({ at: A, from: v0, dur, freeze: true, hold: true });   // hold: the sentence is spoken over this still picture
       let t = A + dur;
       for (const q of ps) { const d = (q.to - q.from) / (q.r * k); segs.push({ at: t, from: q.from, dur: d, rate: q.r * k }); t += d; }
-      segs.push({ at: t, from: v1, dur: GAP, freeze: true });
-      A = t + GAP;
+      const lastBeat = i === beats.length - 1;   // the scene's tail follows the last step: no extra rest before it (no dead air)
+      if (!lastBeat) segs.push({ at: t, from: v1, dur: GAP, freeze: true });
+      A = t + (lastBeat ? 0 : GAP);
       continue;
     }
     const D = p.kind === 'flow' ? (o.breathe ? Math.max(N, dur) : dur) : p.kind === 'sentence' ? Math.min(Math.max(N, dur + GAP), dur + MAXP) : Math.min(Math.max(N, dur + Math.max(GAP, 0.3)), dur + ENDH);
@@ -73,6 +74,7 @@ export function schedule(beats: Beat[], blocks: Record<string, Blk>, lead: numbe
     if (A + D - t > 0.02) segs.push({ at: t, from: v1, dur: A + D - t, freeze: true });
     A += D;
   }
+  if (o.calm) tail = Math.min(tail, 0.8);   // calm pacing: a short rest at the end of a scene, never a stall
   const len = A + tail;
   segs.push({ at: A, from: Math.min(clipDur - 0.05, endV), dur: tail, freeze: true });
   if (lead > 0.02) segs.unshift({ at: 0, from: beats[0].v, dur: lead, freeze: true });

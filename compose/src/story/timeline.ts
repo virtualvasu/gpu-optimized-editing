@@ -11,7 +11,7 @@ const OVERLAP = 0.7, GAP = 0.5;
 // Pacing (storyboard `pacing`): 'voice' = a sentence is always spoken in one go (the picture is sped up or held to fit it); the
 // NEXT sentence starts only when the picture has shown what the last one said, plus a short gap (0.55 s). 'picture' = the voice
 // also waits inside a sentence for the screen (hiccups). Cue the picture at sentence starts only. 'voice' is what tutorials use.
-const PACING: Record<string, any> = { calm: { pause: 99, endHold: 99, breathe: false, gap: 0.55, calm: true, maxRate: 3, maxStep: 14 }, voice: { pause: 99, endHold: 99, breathe: false, gap: 0.55 }, picture: { pause: 99, endHold: 99, breathe: true } };
+const PACING: Record<string, any> = { calm: { pause: 99, endHold: 99, breathe: false, gap: 0.55, calm: true, maxRate: 3, maxStep: 18 }, voice: { pause: 99, endHold: 99, breathe: false, gap: 0.55 }, picture: { pause: 99, endHold: 99, breathe: true } };
 
 /** A clip time in a storyboard is a number of seconds, or "mark:<label>[+/-seconds]" taken from the recorder's marks. */
 export const rv = (x: any, info: ClipInfo, clip: string): number => {
@@ -140,6 +140,10 @@ export const prepScreen = (BLOCKS: Record<string, Blk>, sc: Timed) => {
         if (word !== undefined) end = Math.min(end, a + h.dur, sentenceEnd(BLOCKS, sc, h.b, h.w, h.n ?? 0) + 0.5);
         const next = hs.map((x: any) => x.at).filter((t: number) => t > a + 0.05).sort((x: number, y: number) => x - y)[0];
         if (next !== undefined) end = Math.min(end, next);
+        // calm pacing: the sentence is spoken over a still picture; the box goes the moment that picture starts to move (the click, the page change),
+        // so it never floats over a screen that has changed
+        const hold = (sc.segs || []).find((q: any) => q.hold && a >= q.at - 0.01 && a < q.at + q.dur - 0.05);
+        if (hold) end = Math.min(end, hold.at + hold.dur + 0.05);
         return { at: a, dur: Math.max(0.9, Math.min(h.dur, end - a)), box: h.box, lag: word !== undefined && mark !== undefined ? mark - word : 0, past: h.v != null ? clipTime(sc.segs!, a) - h.v : 0 };   // never longer than the storyboard's dur, only shorter
       });
     })(),

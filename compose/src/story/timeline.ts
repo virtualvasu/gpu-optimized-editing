@@ -108,7 +108,17 @@ const color = (c: string) => ({ red: C.red, green: C.green, amber: C.amber, acce
 export const prepScreen = (BLOCKS: Record<string, Blk>, sc: Timed) => {
   const T = (x: any) => (x.v != null ? sceneTime(sc.segs!, x.v) : at(BLOCKS, sc, x.b, x.w, x.n ?? 0)) + (x.off ?? 0);
   return {
-    highlights: (sc.hl || []).map((h: any) => ({ at: T(h), dur: h.dur, box: h.box })),
+    // `dur` of a cued highlight (v) is recording time: a step that is played at 4x must not keep its box for dur *output* seconds.
+    // So the end is sceneTime(v + dur), and a box never outlives the start of the next box of the scene (no stacked dimming).
+    highlights: (() => {
+      const hs = (sc.hl || []).map((h: any) => ({ h, at: T(h) }));
+      return hs.map(({ h, at: a }: any) => {
+        let end = h.v != null ? sceneTime(sc.segs!, h.v + h.dur) : a + h.dur;
+        const next = hs.map((x: any) => x.at).filter((t: number) => t > a + 0.05).sort((x: number, y: number) => x - y)[0];
+        if (next !== undefined) end = Math.min(end, next);
+        return { at: a, dur: Math.max(0.9, Math.min(h.dur, end - a)), box: h.box };   // never longer than the storyboard's dur, only shorter
+      });
+    })(),
     zooms: (sc.zv || []).map((k: any) => ({ t: sceneTime(sc.segs!, k.v), z: k.z, fx: k.fx, fy: k.fy })),
     overlays: (sc.overlays || []).map((o: any) => ({
       ...o, color: color(o.color), at: T(o),

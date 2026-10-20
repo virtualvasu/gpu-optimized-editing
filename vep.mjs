@@ -40,12 +40,13 @@ const HELP = `vep <command> [episode] ...      (episode = its folder name or a p
   list                          episodes of this project and what each one has
   new <name>                    start an episode folder (SCRIPT.md, narration.json, storyboard.json, clips/)
   voice <ep> [block ...]        synthesize narration.json (cached per block; FORCE=1 to redo, REALIGN=1 to re-time only)
-  upload <ep>                   upload the approved FINAL video to the project's Google Drive folder (video.json "upload"; only after the owner approves it)
+  upload <ep> [--all] [--folder] upload the approved FINAL video to the project's Google Drive folder (video.json "upload"; only after the owner approves it); --all adds captions + thumbnail, --folder puts them in a new subfolder named by the episode's FOLDER file
   check <ep>                    pack, then check: sentences never cut, gaps between sentences, picture speeds, captions inside the voice
   cues <ep>                     one picture cue per sentence + automatic picture speed (voice-first pacing; run after voice and prep)
   split <ep> <block> "<phrase>" ...  cut a narration block at the given words (from the paid audio, no new synthesis)
   prep <ep>                     scale the clips (<episode>/clips/*.mp4, from any recorder) to the theme's window size + read marks  (heavy)
   dry <ep>                      print the timeline (fast; catches bad words and marks before a render)
+  hl <ep>                       print every highlight box with the seconds it stays on screen (storyboard dur vs. the real visible time)
   still <ep> <frame> [...]      render single frames to artifacts/.../stills/  (heavy)
   thumb <ep>                    render the thumbnail to output/<project>/<ep>-thumb.png  (heavy)
   studio <ep>                   open Remotion Studio on the episode (always here)
@@ -215,7 +216,11 @@ async function timeline(P, E) {
     const m = await import(tmp);
     const { storyboard, blocks, clips } = renderInputs(P, E);
     const r = m.buildTimeline(storyboard, blocks, clips);
-    for (const sc of r.TIMELINE) if (sc.type === 'screen') m.prepScreen(r.BLOCKS, sc);   // a bad overlay cue throws here, not mid-render
+    r.HL = [];
+    for (const sc of r.TIMELINE) if (sc.type === 'screen') {
+      const hs = m.prepScreen(r.BLOCKS, sc).highlights;   // a bad overlay cue throws here, not mid-render
+      sc.hl?.forEach((h, i) => r.HL.push({ scene: sc.id, at: sc.start + hs[i].at, old: h.dur, now: hs[i].dur }));
+    }
     return r;
   } finally { fs.unlinkSync(tmp); }
 }
@@ -266,8 +271,11 @@ const commands = {
     const final = path.join(E.out, `${E.name}-FINAL.mp4`);
     if (!fs.existsSync(final)) die(`no final video yet: ${final} (vep render ${E.name})`);
     const titleFile = path.join(E.dir, 'TITLE'), title = fs.existsSync(titleFile) ? fs.readFileSync(titleFile, 'utf8').trim() : E.name;
-    const files = [[final, `${title}.mp4`]];
-    if (flags.includes('--all')) for (const [src, dst] of [[`${E.name}.srt`, `${title}.srt`], [`${E.name}-thumb.png`, `${title} (thumbnail).png`]]) if (fs.existsSync(path.join(E.out, src))) files.push([path.join(E.out, src), dst]);
+    // --folder: everything goes into a new Drive subfolder named by the episode's one-line FOLDER file (else the title)
+    const folderFile = path.join(E.dir, 'FOLDER'), folder = flags.includes('--folder') ? (fs.existsSync(folderFile) ? fs.readFileSync(folderFile, 'utf8').trim() : title) : '';
+    const dir = folder ? `${folder}/` : '', stem = folder || title;
+    const files = [[final, `${dir}${stem}.mp4`]];
+    if (flags.includes('--all')) for (const [src, dst] of [[`${E.name}.srt`, `${dir}${stem}.srt`], [`${E.name}-thumb.png`, `${dir}${stem} (thumbnail).png`]]) if (fs.existsSync(path.join(E.out, src))) files.push([path.join(E.out, src), dst]);
     for (const [src, dst] of files) {
       console.log(`uploading ${path.basename(src)} → ${u.remote}:${dst}`);
       run('rclone', ['copyto', src, `${u.remote}:${dst}`, '--drive-root-folder-id', u.folderId, '--drive-chunk-size', '64M', '-v', '--stats', '20s']);
@@ -310,6 +318,12 @@ const commands = {
     const { TIMELINE, TOTAL } = await timeline(P, findEpisode(P, ep));
     console.log('TOTAL', TOTAL.toFixed(1), 's =', Math.floor(TOTAL / 60) + ':' + String(Math.round(TOTAL % 60)).padStart(2, '0'), ` (${Math.round(TOTAL * 30)} frames)`);
     for (const s of TIMELINE) console.log(s.id.padEnd(10), s.type.padEnd(10), String(+s.start.toFixed(2)).padStart(7), String(+s.len.toFixed(2)).padStart(7));
+  },
+  async hl(P, ep) {
+    const { HL } = await timeline(P, findEpisode(P, ep));
+    let long = 0;
+    for (const h of HL) { const l = h.old - h.now > 1; if (l) long++; console.log(h.scene.padEnd(6), 'at', h.at.toFixed(1).padStart(6), 's  storyboard dur', h.old.toFixed(1).padStart(5), ' visible', h.now.toFixed(1).padStart(5), l ? '  <- would have lingered' : ''); }
+    console.log(`${long} of ${HL.length} boxes stayed more than 1 s past their step (before this fix); every box now ends with its step`);
   },
   async still(P, ep, ...frames) {
     const E = findEpisode(P, ep), tmp = path.join(E.art, '.frames');

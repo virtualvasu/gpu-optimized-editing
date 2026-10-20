@@ -21,10 +21,17 @@ let bad = 0; const all = [];
 for (const sc of t.TIMELINE) for (const p of sc.phrases) {
   const ws = B[p.b].words, first = ws.findIndex((w) => w.s >= p.a0 - 0.06), last = ws.length - 1 - [...ws].reverse().findIndex((w) => w.s < p.a1 + 0.06 && w.s >= p.a0 - 0.06);
   const startsSentence = first <= 0 || ends(ws[first - 1]), endsSentence = last >= ws.length - 1 || ends(ws[last]);
-  if (!startsSentence || !endsSentence) { bad++; console.log(`CUT SENTENCE  scene ${sc.id} block ${p.b}: "${ws[first]?.t} … ${ws[last]?.t}"`); }
-  all.push({ sc: sc.id, b: p.b, s: sc.start + p.A, e: sc.start + p.A + (p.a1 - p.a0) });
+  all.push({ sc: sc.id, b: p.b, s: sc.start + p.A, e: sc.start + p.A + (p.a1 - p.a0), cutAfter: !endsSentence, first: ws[first]?.t, last: ws[last]?.t });
 }
 all.sort((x, y) => x.s - y.s);
+// A phrase boundary inside a sentence is fine when the next phrase starts right where this one ends (the picture is cued to a word, the
+// voice runs on without a pause); it is a CUT SENTENCE only when the voice stops there (a gap of more than 0.06 s).
+for (let i = 0; i < all.length; i++) {
+  const p = all[i], q = all[i + 1];
+  if (p.cutAfter && !(q && q.b === p.b && q.s - p.e <= 0.06)) { bad++; console.log(`CUT SENTENCE  scene ${p.sc} block ${p.b}: "${p.first} … ${p.last}"`); }
+}
+// phrases that run on without a pause are one stretch of voice for the caption check
+for (let i = all.length - 1; i > 0; i--) if (all[i].b === all[i - 1].b && all[i].s - all[i - 1].e <= 0.06) { all[i - 1].e = all[i].e; all.splice(i, 1); }
 const gaps = [];
 for (let i = 1; i < all.length; i++) gaps.push([`${all[i - 1].b}→${all[i].b}`, all[i].s - all[i - 1].e]);
 console.log(`sentences cut: ${bad}  |  phrases: ${all.length}`);

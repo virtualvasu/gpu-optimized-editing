@@ -40,6 +40,12 @@ export const sceneTime = (segs: Seg[], v: number) => {
   return best;
 };
 
+/** clip time (s) shown at scene time t (inverse of sceneTime) */
+export const clipTime = (segs: Seg[], t: number) => {
+  for (const s of segs) if (t >= s.at - 0.001 && t <= s.at + s.dur + 0.001) return s.freeze ? s.from : s.from + (t - s.at) * (s.rate || 1);
+  return segs[segs.length - 1].from;
+};
+
 export function buildTimeline(sb: Storyboard, rawBlocks: Record<string, any>, clips: Record<string, ClipInfo>) {
   const BLOCKS = glueBlocks(rawBlocks);
   const out: Timed[] = [];
@@ -76,7 +82,9 @@ export function buildTimeline(sb: Storyboard, rawBlocks: Record<string, any>, cl
       sc.hl = sc.hl?.map((h: any) => {
         const box = h.box ?? info.boxes?.[h.focus];
         if (!box) throw new Error(`scene ${sc.id}: highlight "${h.focus}" has no box (record it with a focus step, or give "box")`);
-        if (h.b != null) return { b: h.b, w: h.w, n: h.n, off: h.off, dur: h.dur ?? 3, box };
+        // a box tied to a word (b + w [+ n]) lands when the narrator says that word; with a mark (focus or v) as well it is never
+        // shown before the picture has reached that mark, so it cannot sit on an element that is not on screen yet
+        if (h.b != null) return { b: h.b, w: h.w, n: h.n, off: h.off, dur: h.dur ?? 7, box, ...(h.focus != null || h.v != null ? { v: R(h.v ?? `mark:${h.focus}`) } : {}) };
         return { v: R(h.v ?? `mark:${h.focus}`), dur: h.dur ?? 3, box };
       });
     } else if (sc.blocks) {
@@ -102,21 +110,36 @@ export const at = (BLOCKS: Record<string, Blk>, sc: Timed, b: string, w: string,
   return ph.A + (ws - ph.a0);
 };
 
+/** scene-relative time (s) at which the sentence containing the nth occurrence of a word has been spoken */
+export const sentenceEnd = (BLOCKS: Record<string, Blk>, sc: Timed, b: string, w: string, n = 0) => {
+  const ws = wordTime(BLOCKS[b], w, n), words = BLOCKS[b].words;
+  const ph = sc.phrases.find((p) => p.b === b && ws >= p.a0 - 0.06 && ws < p.a1 + 0.06) ?? sc.phrases.find((p) => p.b === b)!;
+  let i = words.findIndex((x) => x.s === ws);
+  while (i < words.length - 1 && !/[.?!:]$/.test(words[i].t)) i++;
+  return ph.A + (Math.min(words[i].e, ph.a1) - ph.a0);
+};
+
 const color = (c: string) => ({ red: C.red, green: C.green, amber: C.amber, accent: C.accentSoft } as Record<string, string>)[c] ?? c;
 
 /** zoom keys and overlays of a screen scene, in scene time */
 export const prepScreen = (BLOCKS: Record<string, Blk>, sc: Timed) => {
   const T = (x: any) => (x.v != null ? sceneTime(sc.segs!, x.v) : at(BLOCKS, sc, x.b, x.w, x.n ?? 0)) + (x.off ?? 0);
   return {
-    // `dur` of a cued highlight (v) is recording time: a step that is played at 4x must not keep its box for dur *output* seconds.
-    // So the end is sceneTime(v + dur), and a box never outlives the start of the next box of the scene (no stacked dimming).
+    // A cued box (v) has its `dur` in recording time: a step played at 4x must not keep its box for dur *output* seconds, so the end is
+    // sceneTime(v + dur). A box tied to a word (b + w) lands when the narrator says the word (not before its mark is on screen) and
+    // goes when that sentence is finished (+0.5 s). A box never outlives the start of the next box of the scene (no stacked dimming).
     highlights: (() => {
-      const hs = (sc.hl || []).map((h: any) => ({ h, at: T(h) }));
-      return hs.map(({ h, at: a }: any) => {
+      const hs = (sc.hl || []).map((h: any) => {
+        const word = h.b != null ? at(BLOCKS, sc, h.b, h.w, h.n ?? 0) + (h.off ?? 0) : undefined;
+        const mark = h.v != null ? sceneTime(sc.segs!, h.v) : undefined;
+        return { h, word, mark, at: Math.max(word ?? 0, mark ?? 0) };
+      });
+      return hs.map(({ h, at: a, word, mark }: any) => {
         let end = h.v != null ? sceneTime(sc.segs!, h.v + h.dur) : a + h.dur;
+        if (word !== undefined) end = Math.min(end, a + h.dur, sentenceEnd(BLOCKS, sc, h.b, h.w, h.n ?? 0) + 0.5);
         const next = hs.map((x: any) => x.at).filter((t: number) => t > a + 0.05).sort((x: number, y: number) => x - y)[0];
         if (next !== undefined) end = Math.min(end, next);
-        return { at: a, dur: Math.max(0.9, Math.min(h.dur, end - a)), box: h.box };   // never longer than the storyboard's dur, only shorter
+        return { at: a, dur: Math.max(0.9, Math.min(h.dur, end - a)), box: h.box, lag: word !== undefined && mark !== undefined ? mark - word : 0, past: h.v != null ? clipTime(sc.segs!, a) - h.v : 0 };   // never longer than the storyboard's dur, only shorter
       });
     })(),
     zooms: (sc.zv || []).map((k: any) => ({ t: sceneTime(sc.segs!, k.v), z: k.z, fx: k.fx, fy: k.fy })),

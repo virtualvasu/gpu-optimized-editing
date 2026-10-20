@@ -219,7 +219,12 @@ async function timeline(P, E) {
     r.HL = [];
     for (const sc of r.TIMELINE) if (sc.type === 'screen') {
       const hs = m.prepScreen(r.BLOCKS, sc).highlights;   // a bad overlay cue throws here, not mid-render
-      sc.hl?.forEach((h, i) => r.HL.push({ scene: sc.id, at: sc.start + hs[i].at, old: h.dur, now: hs[i].dur }));
+      sc.hl?.forEach((h, i) => {
+        const a = hs[i].at, ph = [...sc.phrases].filter((q) => q.A <= a + 0.05).pop();   // the sentence being spoken when the box lands
+        const words = ph ? r.BLOCKS[ph.b].words.filter((w) => w.s >= ph.a0 - 0.06 && w.s < ph.a1 + 0.06) : [];
+        const heard = words.filter((w) => ph.A + (w.s - ph.a0) <= a + 0.05).length;
+        r.HL.push({ scene: sc.id, label: h.focus, at: sc.start + a, old: h.dur, now: hs[i].dur, lag: hs[i].lag, past: hs[i].past, b: ph?.b, off: ph ? a - ph.A : 0, text: words.map((w, k) => (k === heard - 1 ? '[BOX]' : '') + w.t).join(' ') });
+      });
     }
     return r;
   } finally { fs.unlinkSync(tmp); }
@@ -322,7 +327,7 @@ const commands = {
   async hl(P, ep) {
     const { HL } = await timeline(P, findEpisode(P, ep));
     let long = 0;
-    for (const h of HL) { const l = h.old - h.now > 1; if (l) long++; console.log(h.scene.padEnd(6), 'at', h.at.toFixed(1).padStart(6), 's  storyboard dur', h.old.toFixed(1).padStart(5), ' visible', h.now.toFixed(1).padStart(5), l ? '  <- would have lingered' : ''); }
+    for (const h of HL) { console.log('   ', h.scene, h.label, h.b, '+' + h.off.toFixed(1) + 's', (h.lag > 0.3 ? `[picture reaches it ${h.lag.toFixed(1)} s AFTER the word]` : '') + (h.past > 1.5 ? ` [picture already ${h.past.toFixed(1)} s past the mark: check the box still sits on its element]` : ''), h.text); const l = h.old - h.now > 1; if (l) long++; console.log(h.scene.padEnd(6), 'at', h.at.toFixed(1).padStart(6), 's  storyboard dur', h.old.toFixed(1).padStart(5), ' visible', h.now.toFixed(1).padStart(5), l ? '  <- would have lingered' : ''); }
     console.log(`${long} of ${HL.length} boxes stayed more than 1 s past their step (before this fix); every box now ends with its step`);
   },
   async still(P, ep, ...frames) {

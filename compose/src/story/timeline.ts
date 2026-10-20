@@ -11,7 +11,7 @@ const OVERLAP = 0.7, GAP = 0.5;
 // Pacing (storyboard `pacing`): 'voice' = a sentence is always spoken in one go (the picture is sped up or held to fit it); the
 // NEXT sentence starts only when the picture has shown what the last one said, plus a short gap (0.55 s). 'picture' = the voice
 // also waits inside a sentence for the screen (hiccups). Cue the picture at sentence starts only. 'voice' is what tutorials use.
-const PACING: Record<string, any> = { voice: { pause: 99, endHold: 99, breathe: false, gap: 0.55 }, picture: { pause: 99, endHold: 99, breathe: true } };
+const PACING: Record<string, any> = { calm: { pause: 99, endHold: 99, breathe: false, gap: 0.55, calm: true, maxRate: 3, maxStep: 14 }, voice: { pause: 99, endHold: 99, breathe: false, gap: 0.55 }, picture: { pause: 99, endHold: 99, breathe: true } };
 
 /** A clip time in a storyboard is a number of seconds, or "mark:<label>[+/-seconds]" taken from the recorder's marks. */
 export const rv = (x: any, info: ClipInfo, clip: string): number => {
@@ -33,6 +33,7 @@ export const glueBlocks = (blocks: Record<string, any>): Record<string, Blk> => 
 export const sceneTime = (segs: Seg[], v: number) => {
   let best = segs[0]?.at ?? 0;
   for (const s of segs) {
+    if (s.hold && Math.abs(v - s.from) <= 0.01) return s.at;   // a still picture at v: the moment it first shows (calm pacing holds before it moves)
     const r = s.rate || 1, v0 = s.from, v1 = s.freeze ? s.from : s.from + s.dur * r;
     if (!s.freeze && v >= v0 - 0.01 && v <= v1 + 0.01) return s.at + (v - v0) / r;
     if (v >= v0) best = s.at + (s.freeze ? 0 : s.dur);

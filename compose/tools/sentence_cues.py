@@ -5,13 +5,13 @@ Why: a narrator must never be interrupted or hurried inside a sentence. Cue word
 the picture fight over timing (the voice stops, or the picture races). So for every screen scene:
   - only the FIRST beat of each sentence is kept (a sentence = text up to . ? !); its clip time is where that sentence starts on screen;
   - the picture speed for a sentence is the footage between its cue and the next cue divided by the sentence's spoken length,
-    held between 1x and 3x (a scene may change the cap with `maxSpeed`; keep option-heavy screens at 2x or less): slower footage is held on its last frame while the sentence finishes, faster footage runs at 5x and the
+    held between 1x and 2x (a scene may raise the cap with `maxSpeed`, never above 3x; keep option-heavy screens at 1.5x or less): slower footage is held on its last frame while the sentence finishes, faster footage runs at 5x and the
     NEXT sentence waits until the picture has shown it (pacing "voice": a short gap, then the next sentence);
   - callouts and highlights tied to a recorded mark (`focus`) appear when that mark is on screen, not on a word.
-Needs `"pacing": "voice"` in the storyboard (this tool sets it). Safe to run again."""
+Needs `"pacing": "calm"` (or "voice") in the storyboard (this tool sets "calm": the sentence is spoken while the picture rests, then the step plays silently). Safe to run again."""
 import json, re, sys
 
-MAXR = 3.0
+MAXR = 2.0   # relaxed pace (owner, 2026-10-20): the picture never runs faster than 2x by default, 3x at most (a scene's maxSpeed is capped at 3)
 norm = lambda t: re.sub(r'[^a-z0-9_]', '', t.lower())
 
 def main(sb_path, blocks_path, clips_path):
@@ -57,7 +57,7 @@ def main(sb_path, blocks_path, clips_path):
             a0 = cut(bt['b'], i)
             a1 = cut(nx[0]['b'], nx[1]) if nx and nx[0]['b'] == bt['b'] else BLK[bt['b']]['duration']
             v0 = resolve(bt['v'], clip); v1 = resolve(nx[0]['v'], clip) if nx else resolve(sc['endV'], clip)
-            r = round(max(1.0, min(sc.get('maxSpeed', MAXR), (v1 - v0) / max(a1 - a0, 0.5))), 2)
+            r = round(max(1.0, min(min(sc.get('maxSpeed', MAXR), 3.0), (v1 - v0) / max(a1 - a0, 0.5))), 2)
             if nx: rates[k + 1] = r
             else: sc['endRate'] = r
         sc['beats'] = [{**{x: y for x, y in bt.items() if x != 'rate'}, **({'rate': rates[k]} if k in rates else {})} for k, (bt, _) in enumerate(kept)]
@@ -65,7 +65,7 @@ def main(sb_path, blocks_path, clips_path):
             if o.get('kind') == 'callout' and o.get('focus'):      # timed by its mark (what is on screen), not by a word
                 o.pop('b', None); o.pop('w', None); o.pop('n', None)
                 o['lines'] = [l['text'] if isinstance(l, dict) else l for l in o.get('lines', [])]
-    sb['pacing'] = 'voice'
+    sb['pacing'] = 'calm'   # sentence on a still picture, then the step silently (owner, 2026-10-20)
     json.dump(sb, open(sb_path, 'w'), indent=1)
     n = sum(len(sc['beats']) for sc in sb['scenes'] if sc.get('type') == 'screen')
     print(f'{n} sentence cues in {sum(1 for sc in sb["scenes"] if sc.get("type") == "screen")} screen scenes (pacing: voice)')

@@ -1,7 +1,7 @@
 // Timeline QA for a packed episode: node check_timeline.mjs <job dir>   (run through `vep check <ep>`, which packs first)
 //  1. every voice phrase is a whole sentence (starts where a sentence starts, ends where one ends): the narrator is never cut off
 //  2. the gaps between sentences (min / max, and the longest ones)
-//  3. picture speed: how long each scene spends above 8x
+//  3. picture speed: how long each scene spends above 3x
 //  4. captions: every caption lies inside a voice phrase (the captions and the voice use the same timeline)
 import { createRequire } from 'module';
 import fs from 'fs';
@@ -37,8 +37,8 @@ for (let i = 1; i < all.length; i++) gaps.push([`${all[i - 1].b}→${all[i].b}`,
 console.log(`sentences cut: ${bad}  |  phrases: ${all.length}`);
 if (gaps.length) console.log(`gaps between sentences: min ${Math.min(...gaps.map((g) => g[1])).toFixed(2)}s, max ${Math.max(...gaps.map((g) => g[1])).toFixed(2)}s; longest: ` + [...gaps].sort((a, b) => b[1] - a[1]).slice(0, 5).map((g) => `${g[0]} ${g[1].toFixed(1)}s`).join(', '));
 for (const sc of t.TIMELINE) if (sc.segs) {
-  const fast = sc.segs.filter((s) => !s.freeze && (s.rate || 1) > 8), ft = fast.reduce((a, s) => a + s.dur, 0);
-  if (fast.length) console.log(`FAST ${sc.id}: ${ft.toFixed(1)}s of ${sc.len.toFixed(1)}s above 8x (max ${Math.max(...fast.map((s) => s.rate)).toFixed(1)}x)`);
+  const fast = sc.segs.filter((s) => !s.freeze && (s.rate || 1) > 3), ft = fast.reduce((a, s) => a + s.dur, 0);
+  if (fast.length) console.log(`FAST ${sc.id}: ${ft.toFixed(1)}s of ${sc.len.toFixed(1)}s above 3x (max ${Math.max(...fast.map((s) => s.rate)).toFixed(1)}x)  [clip s: ${fast.map((s) => `${s.from.toFixed(1)}-${(s.from + s.dur * s.rate).toFixed(1)} at ${s.rate.toFixed(0)}x`).join(', ')}]`);
 }
 const srt = fs.existsSync(path.join(job, 'captions.srt')) ? fs.readFileSync(path.join(job, 'captions.srt'), 'utf8') : '';
 const tsec = (x) => { const [h, mi, s] = x.split(':'); return +h * 3600 + +mi * 60 + +s.replace(',', '.'); };

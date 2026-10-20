@@ -3,7 +3,7 @@
 // screen action, the picture holds; if the screen action is longer than the sentence, silence lets the UI breathe.
 export type Word = { t: string; s: number; e: number };
 export type Blk = { id: string; duration: number; words: Word[] };
-export type Seg = { at: number; from: number; dur: number; rate?: number; freeze?: boolean };
+export type Seg = { at: number; from: number; dur: number; rate?: number; freeze?: boolean; hold?: boolean };
 export type Beat = { b: string; w: string; n?: number; v: number; rate?: number; waits?: [number, number, number][] };
 export type Phrase = { b: string; A: number; a0: number; a1: number };
 
@@ -53,6 +53,19 @@ export function schedule(beats: Beat[], blocks: Record<string, Blk>, lead: numbe
     }
     const N = pieces.reduce((s, q) => s + (q.to - q.from) / q.r, 0);
     const dur = p.a1 - p.a0;
+    if (o.calm && p.kind !== 'flow') {
+      // Calm pacing (owner, 2026-10-20: relaxed, one thing at a time): the sentence is spoken while the picture rests on the highlighted
+      // element; THEN the step (click, typing, loading) plays with no narration, at a followable speed (at most maxRate, 3x). A very long
+      // silent step (more than maxStep seconds) is sped up just enough, never more than 2x on top.
+      const cap = o.maxRate ?? 3, ps = pieces.map((q) => ({ ...q, r: Math.min(q.r, cap) }));
+      const Nc = ps.reduce((a, q) => a + (q.to - q.from) / q.r, 0), k = Nc > (o.maxStep ?? 14) ? Math.min(Nc / (o.maxStep ?? 14), 2) : 1;
+      segs.push({ at: A, from: v0, dur, freeze: true, hold: true });   // hold: the sentence is spoken over this still picture
+      let t = A + dur;
+      for (const q of ps) { const d = (q.to - q.from) / (q.r * k); segs.push({ at: t, from: q.from, dur: d, rate: q.r * k }); t += d; }
+      segs.push({ at: t, from: v1, dur: GAP, freeze: true });
+      A = t + GAP;
+      continue;
+    }
     const D = p.kind === 'flow' ? (o.breathe ? Math.max(N, dur) : dur) : p.kind === 'sentence' ? Math.min(Math.max(N, dur + GAP), dur + MAXP) : Math.min(Math.max(N, dur + Math.max(GAP, 0.3)), dur + ENDH);
     const scale = N > 0 ? Math.min(D / N, 1.25) : 1;   // <1 speeds the picture up to fit the voice; >1 slows it gently, then holds
     let t = A;
@@ -66,7 +79,7 @@ export function schedule(beats: Beat[], blocks: Record<string, Blk>, lead: numbe
   const out: Seg[] = [];
   for (const s of segs) {
     const q = out[out.length - 1];
-    if (q && q.freeze && s.freeze && Math.abs(q.from - s.from) < 0.05) { q.dur += s.dur; continue; }
+    if (q && q.freeze && s.freeze && !q.hold && !s.hold && Math.abs(q.from - s.from) < 0.05) { q.dur += s.dur; continue; }
     if (q && !q.freeze && !s.freeze && Math.abs((q.rate ?? 1) - (s.rate ?? 1)) / Math.max(q.rate ?? 1, s.rate ?? 1) < 0.15 && Math.abs(q.from + q.dur * (q.rate ?? 1) - s.from) < 0.3) {
       const dv = q.dur * (q.rate ?? 1) + s.dur * (s.rate ?? 1); q.dur += s.dur; q.rate = dv / q.dur; continue;
     }

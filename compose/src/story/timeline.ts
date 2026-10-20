@@ -72,7 +72,7 @@ export function buildTimeline(sb: Storyboard, rawBlocks: Record<string, any>, cl
         if (o.kind === 'callout') {
           o.box = o.box ?? info.boxes?.[o.focus];
           if (!o.box) throw new Error(`scene ${sc.id}: callout "${o.focus}" has no box (record it with a focus step, or give "box")`);
-          if (o.v == null && o.b == null) o.v = R(`mark:${o.focus}`);
+          if (o.v == null) o.v = R(`mark:${o.focus}`);   // with a word (b + w) as well, it lands at the word but never before its mark is on screen
           o.lines = o.lines?.map((l: any) => cue(typeof l === 'string' ? { text: l } : l));
         }
         if (o.ticks) o.ticks = o.ticks.map(cue);
@@ -144,11 +144,21 @@ export const prepScreen = (BLOCKS: Record<string, Blk>, sc: Timed) => {
       });
     })(),
     zooms: (sc.zv || []).map((k: any) => ({ t: sceneTime(sc.segs!, k.v), z: k.z, fx: k.fx, fy: k.fy })),
-    overlays: (sc.overlays || []).map((o: any) => ({
-      ...o, color: color(o.color), at: T(o),
-      ...(o.lines ? { lines: o.lines.map((l: any) => ({ ...l, color: l.color && color(l.color), at: l.v != null || l.b != null ? T(l) : undefined })) } : {}),
+    overlays: (sc.overlays || []).map((o: any) => {
+      // explanatory callouts (owner, 2026-10-20): the card lands when the narrator reaches what it explains (b + w), each of its lines when
+      // its own words are said, and it goes shortly after that sentence is finished; never before the mark (focus) is on screen
+      const word = o.b != null ? at(BLOCKS, sc, o.b, o.w, o.n ?? 0) + (o.off ?? 0) : undefined;
+      const oAt = word !== undefined && o.v != null ? Math.max(word, sceneTime(sc.segs!, o.v)) : T(o);
+      const lineAts = (o.lines || []).filter((l: any) => l.v != null || l.b != null).map((l: any) => Math.max(T(l), oAt + 0.55));
+      const dur = o.kind === 'callout' && word !== undefined
+        ? Math.max(2.5, (lineAts.length ? Math.max(...lineAts) - oAt + 2.2 : 0), Math.min(o.dur ?? 4.5, sentenceEnd(BLOCKS, sc, o.b, o.w, o.n ?? 0) + 1.4 - oAt))   // reading time after the last line
+        : o.dur;
+      return {
+      ...o, dur, color: color(o.color), at: oAt,
+      ...(o.lines ? { lines: o.lines.map((l: any) => ({ ...l, color: l.color && color(l.color), at: l.v != null || l.b != null ? Math.max(T(l), oAt + 0.55) : undefined })) } : {}),
       ...(o.ticks ? { ticks: o.ticks.map(T) } : {}),
-    })),
+      };
+    }),
   };
 };
 

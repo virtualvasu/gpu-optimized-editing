@@ -7,7 +7,7 @@ the picture fight over timing (the voice stops, or the picture races). So for ev
   - the picture speed for a sentence is the footage between its cue and the next cue divided by the sentence's spoken length,
     held between 1x and 2x (a scene may raise the cap with `maxSpeed`, never above 3x; keep option-heavy screens at 1.5x or less): slower footage is held on its last frame while the sentence finishes, faster footage runs at 5x and the
     NEXT sentence waits until the picture has shown it (pacing "voice": a short gap, then the next sentence);
-  - callouts and highlights tied to a recorded mark (`focus`) appear when that mark is on screen, not on a word.
+  - callouts and highlights tied to a recorded mark (`focus`) are never shown before that mark is on screen; with words (b + w) they land when the narrator says them.
 Needs `"pacing": "calm"` (or "voice") in the storyboard (this tool sets "calm": the sentence is spoken while the picture rests, then the step plays silently). Safe to run again."""
 import json, re, sys
 
@@ -63,8 +63,8 @@ def main(sb_path, blocks_path, clips_path):
         sc['beats'] = [{**{x: y for x, y in bt.items() if x != 'rate'}, **({'rate': rates[k]} if k in rates else {})} for k, (bt, _) in enumerate(kept)]
         for o in sc.get('overlays', []):
             if o.get('kind') == 'callout' and o.get('focus'):      # timed by its mark (what is on screen), not by a word
-                o.pop('b', None); o.pop('w', None); o.pop('n', None)
-                o['lines'] = [l['text'] if isinstance(l, dict) else l for l in o.get('lines', [])]
+                # a callout keeps the words it is tied to (b + w, also per line): it lands when the narrator reaches what it explains
+                o['lines'] = [l if isinstance(l, dict) and ('b' in l or 'v' in l) else (l['text'] if isinstance(l, dict) else l) for l in o.get('lines', [])]
     sb['pacing'] = 'calm'   # sentence on a still picture, then the step silently (owner, 2026-10-20)
     json.dump(sb, open(sb_path, 'w'), indent=1)
     n = sum(len(sc['beats']) for sc in sb['scenes'] if sc.get('type') == 'screen')

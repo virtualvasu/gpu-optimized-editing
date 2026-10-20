@@ -218,7 +218,12 @@ async function timeline(P, E) {
     const r = m.buildTimeline(storyboard, blocks, clips);
     r.HL = [];
     for (const sc of r.TIMELINE) if (sc.type === 'screen') {
-      const hs = m.prepScreen(r.BLOCKS, sc).highlights;   // a bad overlay cue throws here, not mid-render
+      const pr = m.prepScreen(r.BLOCKS, sc), hs = pr.highlights;   // a bad overlay cue throws here, not mid-render
+      r.OV = r.OV || [];
+      for (const o of pr.overlays) if (o.kind === 'callout') {
+        const said = (t) => { const ph = [...sc.phrases].filter((q) => q.A <= t + 0.05).pop(); if (!ph) return ''; const ws = r.BLOCKS[ph.b].words.filter((w) => w.s >= ph.a0 - 0.06 && w.s < ph.a1 + 0.06); const k = ws.filter((w) => ph.A + (w.s - ph.a0) <= t + 0.05).length; return ws.map((w, i) => (i === k - 1 ? '[HERE]' : '') + w.t).join(' '); };
+        r.OV.push({ scene: sc.id, head: o.head, at: sc.start + o.at, dur: o.dur, text: said(o.at), lines: (o.lines || []).map((l) => ({ text: l.text, at: l.at != null ? sc.start + l.at : null, said: l.at != null ? said(l.at) : '' })) });
+      }
       sc.hl?.forEach((h, i) => {
         const a = hs[i].at, ph = [...sc.phrases].filter((q) => q.A <= a + 0.05).pop();   // the sentence being spoken when the box lands
         const words = ph ? r.BLOCKS[ph.b].words.filter((w) => w.s >= ph.a0 - 0.06 && w.s < ph.a1 + 0.06) : [];
@@ -328,6 +333,7 @@ const commands = {
     const { HL } = await timeline(P, findEpisode(P, ep));
     let long = 0;
     for (const h of HL) { console.log('   ', h.scene, h.label, h.b, '+' + h.off.toFixed(1) + 's', (h.lag > 0.3 ? `[picture reaches it ${h.lag.toFixed(1)} s AFTER the word]` : '') + (h.past > 1.5 ? ` [picture already ${h.past.toFixed(1)} s past the mark: check the box still sits on its element]` : ''), h.text); const l = h.old - h.now > 1; if (l) long++; console.log(h.scene.padEnd(6), 'at', h.at.toFixed(1).padStart(6), 's  storyboard dur', h.old.toFixed(1).padStart(5), ' visible', h.now.toFixed(1).padStart(5), l ? '  <- would have lingered' : ''); }
+    for (const o of (await timeline(P, findEpisode(P, ep))).OV || []) { console.log('callout', o.scene, JSON.stringify(o.head), 'at', o.at.toFixed(1), 'for', o.dur.toFixed(1), 's:', o.text); for (const l of o.lines) console.log('      line', JSON.stringify(l.text), l.at != null ? 'at ' + l.at.toFixed(1) + ': ' + l.said : '(timed after the card)'); }
     console.log(`${long} of ${HL.length} boxes stayed more than 1 s past their step (before this fix); every box now ends with its step`);
   },
   async still(P, ep, ...frames) {

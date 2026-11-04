@@ -16,6 +16,9 @@ export type Theme = {
   captions: { size: number; top: number; width: number };
   audio: { music: number; duck: number; sting: number; transition: number; endTransition: number };
   backdrop: { lines: [string, string, string][] };
+  // optional highlight look. Absent = the default spotlight (screen dimmed, violet frame). `style: "ring"` = a coloured frame without dimming plus an
+  // optional label pill; `tones` names a colour per meaning (tone -> key of `colors` or #RRGGBB); `sound` plays assets.tick when a box appears.
+  highlight?: { style?: 'spotlight' | 'ring'; dim?: number; sound?: boolean; soundVolume?: number; tones?: Record<string, string> };
 };
 
 export const C: Record<string, string> = {};

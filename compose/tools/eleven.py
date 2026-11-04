@@ -4,7 +4,7 @@ import base64, json, os, urllib.request, urllib.error
 
 ENV = os.environ.get('VEP_ENV') or os.path.join(os.path.dirname(__file__), '..', '..', '.env')   # the engine's .env
 
-KEYS = ['elevenlabs', 'elevenlabs2']
+KEYS = ['elevenlabs', 'elevenlabs2', 'elevenlabs3']
 _active = [0]
 
 

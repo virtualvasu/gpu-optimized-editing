@@ -130,11 +130,12 @@ theme.json>"` and override only some keys (objects merge, lists replace). Asset 
 | `brand.wordmark`, `brand.site`, `brand.url` | footer wordmark, the line under the end scene (when there is no end card), default URL in the window's address pill |
 | `colors.*` | `bgTop`/`bgBot` ground gradient, `accent`/`accentSoft`/`accentDeep` brand purples, `text`, `muted`, `dim`, `red`/`green`/`amber` status colours. Always `#RRGGBB` |
 | `fonts.sans`, `fonts.mono` | any Google Fonts family names (loaded at render time) |
-| `assets.logo`, `assets.music`, `assets.sting`, `assets.whoosh`, `assets.whooshSoft` | logo image, music bed, opening sting, scene-change sounds (`compose/tools/synth_audio.py` makes royalty-free ones) |
+| `assets.logo`, `assets.music`, `assets.sting`, `assets.whoosh`, `assets.whooshSoft`, `assets.tick` (optional) | logo image, music bed, opening sting, scene-change sounds, highlight ping (`compose/tools/synth_audio.py` makes royalty-free ones) |
 | `endCard` | `tagline` + `accent` (gradient second line) + `url` button, shown when the storyboard's end scene has `"card": true` |
 | `labels.recap` | the small heading over the recap scene |
 | `window` | the macOS window around recordings: position `x`,`y`, content size `w`×`h` (clips are scaled to it), title `bar` height, `radius`, `titleBar` gradient, `urlPill` colour, traffic `lights` |
 | `captions` | word-synced caption `size`, `top` (px from the top), `width` |
+| `highlight` | optional. `style`: `"spotlight"` (default: dim the screen, violet frame) or `"ring"` (coloured frame + optional label pill, no dimming); `dim` (0 to 1, ring style, default 0); `sound` + `soundVolume`: play `assets.tick` as each box appears; `tones`: `{ name: colour key or #RRGGBB }` so storyboards say `"tone": "problem"` |
 | `audio` | volumes: `music` bed, `duck` (how far music drops under the voice, 0 to 1), `sting`, `transition` (scene changes), `endTransition` |
 | `backdrop.lines` | the faint scrolling log behind every scene: `[type, process, message, tone?]`, tone `red`/`green` (default: red for not_found/error, green for found) |
 
@@ -155,7 +156,7 @@ its nth occurrence.
 |---|---|
 | `title` | `eyebrow`, `line1`, `line2` (gradient) |
 | `section` | `chapter` (index into labels), `title`, `tagline`: big outlined number + progress bar |
-| `screen` | `clip`, `chapter`, `url`?; `beats`: `[{ b, w, v, rate?, waits?: [[from, to, rate]] }]` = when word `w` of block `b` is heard, the clip shows time `v`; footage between beats plays at `rate`, dead waits faster; `endV`, `endRate`, `endWaits`; `hl`: `[{ focus: "<mark with a box>" | box: [x,y,w,h], v? \| b+w, dur }]` highlights (dim the rest, glow the box); `zv`: `[{ v, z, fx, fy }]` zoom keys; `overlays`: `[{ kind: "badge", text, color, v | b+w, dur, top? }]` (also `duo`, `chain`, `callout`, `steps`, below) |
+| `screen` | `clip`, `chapter`, `url`?; `beats`: `[{ b, w, v, rate?, waits?: [[from, to, rate]] }]` = when word `w` of block `b` is heard, the clip shows time `v`; footage between beats plays at `rate`, dead waits faster; `endV`, `endRate`, `endWaits`; `hl`: `[{ focus: "<mark with a box>" | box: [x,y,w,h], v? \| b+w, dur, tone?, color?, label?, side? }]` highlights (default: dim the rest, glow the box; with the theme's `highlight.style: "ring"`: a coloured frame, no dimming, plus a `label` pill beside the box; `tone` = a name from the theme's `highlight.tones`, `color` = a theme colour key or #RRGGBB, `side` = right\|left\|top\|bottom, default the first that fits); `zv`: `[{ v, z, fx, fy }]` zoom keys; `overlays`: `[{ kind: "badge", text, color, v | b+w, dur, top? }]` (also `duo`, `chain`, `callout`, `steps`, below) |
 | `recap` | `items: [{ b, w, title, sub }]` (each arrives on its word), `cta: { b, w, text }` |
 | `end` | `line1`, `line2`, `cta`, `card`: `true` (the theme's end card) or `{ tagline, accent, url }` |
 | anything else | a project scene from `scenes/index.tsx`; `cues: { propName: [block, word, nth?] }` become scene-time props |

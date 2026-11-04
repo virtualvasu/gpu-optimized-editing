@@ -85,8 +85,9 @@ export function buildTimeline(sb: Storyboard, rawBlocks: Record<string, any>, cl
         if (!box) throw new Error(`scene ${sc.id}: highlight "${h.focus}" has no box (record it with a focus step, or give "box")`);
         // a box tied to a word (b + w [+ n]) lands when the narrator says that word; with a mark (focus or v) as well it is never
         // shown before the picture has reached that mark, so it cannot sit on an element that is not on screen yet
-        if (h.b != null) return { b: h.b, w: h.w, n: h.n, off: h.off, dur: h.dur ?? 7, box, ...((h.focus != null || h.v != null) && !h.nomark ? { v: R(h.v ?? `mark:${h.focus}`) } : {}) };   // nomark: a static screen, timed by the word alone
-        return { v: R(h.v ?? `mark:${h.focus}`), dur: h.dur ?? 3, box };
+        const look = { color: h.color, tone: h.tone, label: h.label, side: h.side };   // optional look (theme.highlight.style "ring"): colour / tone, label pill, pill side
+        if (h.b != null) return { b: h.b, w: h.w, n: h.n, off: h.off, dur: h.dur ?? 7, box, ...look, ...((h.focus != null || h.v != null) && !h.nomark ? { v: R(h.v ?? `mark:${h.focus}`) } : {}) };   // nomark: a static screen, timed by the word alone
+        return { v: R(h.v ?? `mark:${h.focus}`), dur: h.dur ?? 3, box, ...look };
       });
     } else if (sc.blocks) {
       let cur = sc.lead ?? 0.7;
@@ -144,7 +145,7 @@ export const prepScreen = (BLOCKS: Record<string, Blk>, sc: Timed) => {
         // so it never floats over a screen that has changed
         const hold = (sc.segs || []).find((q: any) => q.hold && a >= q.at - 0.01 && a < q.at + q.dur - 0.05);
         if (hold) end = Math.min(end, hold.at + hold.dur + 0.05);
-        return { at: a, dur: Math.max(0.9, Math.min(h.dur, end - a)), box: h.box, lag: word !== undefined && mark !== undefined ? mark - word : 0, past: h.v != null ? clipTime(sc.segs!, a) - h.v : 0 };   // never longer than the storyboard's dur, only shorter
+        return { at: a, dur: Math.max(0.9, Math.min(h.dur, end - a)), box: h.box, color: h.color, tone: h.tone, label: h.label, side: h.side, lag: word !== undefined && mark !== undefined ? mark - word : 0, past: h.v != null ? clipTime(sc.segs!, a) - h.v : 0 };   // never longer than the storyboard's dur, only shorter
       });
     })(),
     zooms: (sc.zv || []).map((k: any) => ({ t: sceneTime(sc.segs!, k.v), z: k.z, fx: k.fx, fy: k.fy })),

@@ -1,7 +1,7 @@
 // A screen recording inside a macOS-style window: traffic lights, a URL pill, a soft long shadow, eased zoom keyframes and focus
 // highlights. Geometry and colours are the theme's `window`; recordings are pre-scaled to window.w x window.h (vep prep).
 import React from 'react';
-import { Freeze, OffthreadVideo, Sequence, interpolate, staticFile, useCurrentFrame } from 'remotion';
+import { Audio, Freeze, OffthreadVideo, Sequence, interpolate, staticFile, useCurrentFrame } from 'remotion';
 import { C, FONT, FPS, TH, clamp, easeInOut, easeOut, sec, rgba } from './theme';
 import { Overlay, OverlaySpec } from './overlays';
 
@@ -9,17 +9,54 @@ const clampOpts = { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' } as con
 export type Seg = { at: number; from: number; dur: number; rate?: number; freeze?: boolean };
 export type Zoom = { t: number; z: number; fx: number; fy: number };
 // Focus highlight (owner rule 2026-10-12: do not zoom in; keep the whole section visible and highlight it). `box` is in clip pixels (1920x1080).
-export type Highlight = { at: number; dur: number; box: [number, number, number, number] };
+// Optional look (used when the theme's highlight.style is "ring"): `color` (a key of the theme colours or #RRGGBB) or `tone` (a name from highlight.tones,
+// e.g. "customer" -> amber), `label` = a short pill beside the box, `side` = where the pill goes (right|left|top|bottom; default: the first that fits).
+export type Highlight = { at: number; dur: number; box: [number, number, number, number]; color?: string; tone?: string; label?: string; side?: 'right' | 'left' | 'top' | 'bottom' };
 
 const HL: React.FC<{ h: Highlight; t: number }> = ({ h, t }) => {
-  const S = TH.window.w / 1920;
+  const S = TH.window.w / 1920, HC = TH.highlight || {};
+  const ring = HC.style === 'ring';
   const a = interpolate(t, [h.at, h.at + 0.4, h.at + h.dur - 0.45, h.at + h.dur], [0, 1, 1, 0], clampOpts);
-  if (a <= 0.01) return null;
+  const tick = HC.sound && TH.assets.tick ? <Sequence from={sec(h.at)} durationInFrames={sec(0.6)}><Audio src={staticFile(TH.assets.tick)} volume={HC.soundVolume ?? 0.6} /></Sequence> : null;   // a soft ping as the box appears
+  if (a <= 0.01) return tick;
   const pad = 12, [x, y, w, hh] = h.box;
   const pulse = 0.75 + 0.25 * Math.sin((t - h.at) * 5);
+  const L = x * S - pad, T = y * S - pad, BW = w * S + pad * 2, BH = hh * S + pad * 2;
+  if (!ring) return (
+    <>{tick}<div style={{ position: 'absolute', left: L, top: T, width: BW, height: BH, borderRadius: 16, opacity: a, pointerEvents: 'none',
+      border: `3px solid ${C.accentSoft}`, boxShadow: `0 0 0 4000px ${rgba(C.bgBot, 0.5 * a)}, 0 0 ${28 * pulse}px ${C.accent}, inset 0 0 ${18 * pulse}px ${rgba(C.accent, .25)}` }} /></>
+  );
+  // ring style: a coloured frame (the colour says what the box is: system = violet, customer = amber, problem = red, fixed = green) plus an optional label pill
+  const named = h.tone ? HC.tones?.[h.tone] : h.color;
+  const col = named ? (named[0] === '#' ? named : C[named] || C.accentSoft) : C.accentSoft;
+  const dim = HC.dim ?? 0;
+  const WW = TH.window.w, WH = TH.window.h, FS = 28, PH = 62, GAP = 22;
+  const PW = h.label ? Math.min(WW - 40, h.label.length * FS * 0.58 + 78) : 0;
+  let pill: React.CSSProperties | null = null;
+  if (h.label) {
+    const cy = clamp(T + BH / 2 - PH / 2, 12, WH - PH - 12), cx = clamp(L + BW / 2 - PW / 2, 12, WW - PW - 12);
+    const fits: Record<string, React.CSSProperties | null> = {
+      right: L + BW + GAP + PW <= WW - 12 ? { left: L + BW + GAP, top: cy } : null,
+      left: L - GAP - PW >= 12 ? { left: L - GAP - PW, top: cy } : null,
+      top: T - GAP - PH >= 12 ? { left: cx, top: T - GAP - PH } : null,
+      bottom: T + BH + GAP + PH <= WH - 12 ? { left: cx, top: T + BH + GAP } : null,
+    };
+    const order = h.side ? [h.side, 'right', 'left', 'top', 'bottom'] : (x * S + w * S / 2 < WW / 2 ? ['right', 'top', 'bottom', 'left'] : ['left', 'top', 'bottom', 'right']);
+    pill = order.map((s) => fits[s]).find(Boolean) || { left: clamp(L + 16, 12, WW - PW - 12), top: clamp(T + 16, 12, WH - PH - 12) };   // nothing fits (a huge box): inside its top-left corner
+  }
+  const slide = (1 - Math.min(1, (t - h.at) / 0.35)) * 10;
   return (
-    <div style={{ position: 'absolute', left: x * S - pad, top: y * S - pad, width: w * S + pad * 2, height: hh * S + pad * 2, borderRadius: 16, opacity: a, pointerEvents: 'none',
-      border: `3px solid ${C.accentSoft}`, boxShadow: `0 0 0 4000px ${rgba(C.bgBot, 0.5 * a)}, 0 0 ${28 * pulse}px ${C.accent}, inset 0 0 ${18 * pulse}px ${rgba(C.accent, .25)}` }} />
+    <>{tick}
+      {dim > 0 && <div style={{ position: 'absolute', left: L, top: T, width: BW, height: BH, borderRadius: 16, opacity: a, pointerEvents: 'none', boxShadow: `0 0 0 4000px ${rgba(C.bgBot, dim * a)}` }} />}
+      <div style={{ position: 'absolute', left: L, top: T, width: BW, height: BH, borderRadius: 16, opacity: a, pointerEvents: 'none',
+        border: `3px solid ${col}`, boxShadow: `0 0 ${24 * pulse}px ${rgba(col, .7)}, inset 0 0 ${16 * pulse}px ${rgba(col, .16)}` }} />
+      {pill && h.label && (
+        <div style={{ position: 'absolute', ...pill, height: PH, opacity: a, transform: `translateY(${slide}px)`, pointerEvents: 'none', display: 'flex', alignItems: 'center', gap: 14, padding: '0 26px', borderRadius: 99,
+          background: rgba(C.bgTop, .96), border: `1px solid ${rgba(col, .45)}`, boxShadow: `0 10px 36px rgba(0,0,0,.5), 0 0 28px ${rgba(col, .3)}`, fontFamily: FONT, fontSize: FS, fontWeight: 700, color: C.text, whiteSpace: 'nowrap' }}>
+          <span style={{ width: 14, height: 14, borderRadius: 99, background: col, boxShadow: `0 0 12px ${col}`, flex: 'none' }} />{h.label}
+        </div>
+      )}
+    </>
   );
 };
 

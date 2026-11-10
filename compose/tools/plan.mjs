@@ -31,14 +31,16 @@ for (const sc of plan.scenes) {
   n++;
   const name = `${String(n).padStart(2, '0')}-${sc.id}`, keep = [], beats = [];
   let off = 0;
+  const pills = [];   // a shot's `label: { text, sub }` becomes a floating label pill when its sentence starts
   for (const shot of sc.shots) {
     const rs = ranges(shot.raw);
+    if (shot.b && shot.label) pills.push({ kind: 'pill', b: shot.b, w: shot.w || firstWord(shot.b), off: 0.25, dur: shot.label.dur ?? 5.5, text: shot.label.text, ...(shot.label.sub ? { sub: shot.label.sub } : {}) });
     if (shot.b) beats.push({ b: shot.b, w: shot.w || firstWord(shot.b), v: +off.toFixed(2), ...(shot.rate ? { rate: shot.rate } : {}) });
     for (const [a, b] of rs) { if (!(b > a)) throw new Error(`plan: scene ${sc.id}: range ${a}-${b} is empty`); keep.push([a, b]); off += b - a; }
   }
   const { shots, ...rest } = sc;
   clips.push({ name, keep });
-  scenes.push({ ...rest, clip: name, beats, endV: +off.toFixed(2), endRate: sc.endRate ?? 1.5, lead: sc.lead ?? 0.5, tail: sc.tail ?? 1.0 });
+  scenes.push({ ...rest, overlays: [...(rest.overlays || []), ...pills], clip: name, beats, endV: +off.toFixed(2), endRate: sc.endRate ?? 1.5, lead: sc.lead ?? 0.5, tail: sc.tail ?? 1.0 });
 }
 fs.writeFileSync(path.join(dir, 'cuts.json'), JSON.stringify({ source: plan.source, crop: plan.crop, clips }, null, 1));
 const { source, crop, scenes: _s, ...sb } = plan;

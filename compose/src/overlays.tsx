@@ -10,6 +10,7 @@ export type OverlaySpec =
   | { kind: 'duo'; title?: string; left: Card; right: Card; mid: string; midColor?: string; at: number; dur: number; top?: number }
   | { kind: 'chain'; steps: { text: string; color: string; at: number }[]; dur: number; top?: number }
   | { kind: 'badge'; text: string; color: string; at: number; dur: number; top?: number }
+  | { kind: 'pill'; text: string; sub?: string; at: number; dur: number }   // a floating label at the window's bottom-left (the investor video's look)
   | { kind: 'callout'; box: [number, number, number, number]; side?: 'left' | 'right' | 'top' | 'bottom'; anchor?: [number, number]; head?: string; value?: string;
       lines?: CalloutLine[]; mono?: boolean; color?: string; width?: number; at: number; dur: number }
   | { kind: 'steps'; items: string[]; done?: number; ticks?: number[]; at: number; dur: number };
@@ -115,6 +116,20 @@ export const Overlay: React.FC<{ o: OverlaySpec; t: number }> = ({ o, t }) => {
   if (o.kind === 'callout') return <Callout o={o} t={t} />;
   if (o.kind === 'steps') return <Steps o={o} t={t} />;
   const top = ('top' in o && o.top) || 96;
+  if (o.kind === 'pill') {
+    const a = interpolate(t, [o.at, o.at + 0.45, o.at + o.dur - 0.45, o.at + o.dur], [0, 1, 1, 0], clampO), p = interpolate(t, [o.at + 0.1, o.at + 0.7], [0, 1], { ...clampO, easing: easeOut });
+    if (a <= 0.01) return null;
+    return (
+      <div style={{ position: 'absolute', left: 28, bottom: 28, display: 'flex', alignItems: 'center', gap: 16, padding: '14px 26px 14px 18px', borderRadius: 18, opacity: a * (0.4 + 0.6 * p), transform: `translateY(${(1 - p) * 18}px)`,
+        background: 'rgba(12,9,24,.94)', border: `1px solid ${rgba(C.accentSoft, .38)}`, boxShadow: `0 14px 40px rgba(0,0,0,.55), 0 0 30px ${rgba(C.accent, .25)}` }}>
+        <div style={{ width: 12, height: 12, borderRadius: 6, background: C.accentSoft, boxShadow: `0 0 0 6px ${rgba(C.accent, .22)}`, flex: 'none' }} />
+        <div>
+          <div style={{ fontFamily: FONT, fontSize: 27, fontWeight: 700, color: C.text, letterSpacing: -0.2 }}>{o.text}</div>
+          {o.sub ? <div style={{ fontFamily: FONT, fontSize: 18, color: C.muted, marginTop: 2 }}>{o.sub}</div> : null}
+        </div>
+      </div>
+    );
+  }
   if (o.kind === 'badge') {
     const a = interpolate(t, [o.at, o.at + 0.45, o.at + o.dur - 0.4, o.at + o.dur], [0, 1, 1, 0], clampO);
     if (a <= 0.01) return null;

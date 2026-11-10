@@ -79,7 +79,7 @@ export const MacScreen: React.FC<{ dur: number; src: string; segs: Seg[]; zooms?
       // the dark film's window: rises from below with a little tilt, a soft purple glow under it, a hairline edge
       position: 'absolute', left: MAC.x, top: MAC.y, width: MAC.w, height: MAC.h + MAC.bar, borderRadius: MAC.radius, transformOrigin: '50% 100%',
       opacity: inP * (1 - outP), transform: `perspective(1800px) translateY(${(1 - inP) * 110 - outP * 20}px) rotateX(${(1 - inP) * 14}deg) scale(${(0.95 + 0.05 * inP) * (1 - 0.03 * outP)})`,
-      filter: `${(1 - inP) * 6 + outP * 6 > 0.05 ? `blur(${(1 - inP) * 6 + outP * 6}px) ` : ''}drop-shadow(0 30px 90px rgba(124,58,237,.36)) drop-shadow(0 18px 40px rgba(0,0,0,.55))`,
+      filter: `${(1 - inP) * 6 + outP * 6 > 0.05 ? `blur(${(1 - inP) * 6 + outP * 6}px) ` : ''}${C.mode === 'light' ? 'drop-shadow(0 40px 80px rgba(30,24,60,.14)) drop-shadow(0 8px 20px rgba(30,24,60,.10))' : 'drop-shadow(0 30px 90px rgba(124,58,237,.36)) drop-shadow(0 18px 40px rgba(0,0,0,.55))'}`,
     } : {
       position: 'absolute', left: MAC.x, top: MAC.y, width: MAC.w, height: MAC.h + MAC.bar, borderRadius: MAC.radius,
       opacity: inP * (1 - outP), transform: `translateY(${(1 - inP) * 26 - outP * 24}px) scale(${scale})`, filter: (1 - inP) * 14 + outP * 12 > 0.05 ? `blur(${(1 - inP) * 14 + outP * 12}px)` : 'none',

@@ -52,8 +52,8 @@ export const Story: React.FC<StoryProps> = ({ theme, storyboard: sb, blocks, cli
         // `scene` = this scene's own storyboard entry, so a project scene can be data-driven (graph, problem, stats) instead of baked in
         return seq(sc, <Custom dur={d} scene={sc} {...cues} />);
       })}
-      <Chrome intervals={chrome} total={TOTAL} labels={sb.labels} />
-      <Captions chunks={chunks} />
+      {TH.look !== 'film' && <Chrome intervals={chrome} total={TOTAL} labels={sb.labels} />}
+      {TH.look !== 'film' && <Captions chunks={chunks} />}
       <Audio src={staticFile(TH.assets.music)} volume={musicVol} loop />
       {TIMELINE.flatMap((sc) => sc.phrases.map((p: Phrase, i: number) => <Sequence key={'vo' + sc.start + p.b + i} from={sec(sc.start + p.A)}><Audio src={staticFile(`voice/${p.b}.mp3`)} startFrom={sec(p.a0)} endAt={sec(p.a1)} volume={1} /></Sequence>))}
       {sfx.map(([n, t, v], i) => <Sequence key={'s' + i} from={sec(t)}><Audio src={staticFile(n)} volume={v} /></Sequence>)}

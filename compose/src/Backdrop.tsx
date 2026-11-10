@@ -21,6 +21,14 @@ function lines(pool: string[][]) {
 
 export const Backdrop: React.FC<{ boosts: number[]; total: number }> = ({ boosts, total }) => {
   const frame = useCurrentFrame();
+  if (TH.look === 'film') {   // near-flat background with one very slow, barely visible light drifting across it
+    const t = frame / 30, x = 50 + 18 * Math.sin(t * 0.18), y = 48 + 10 * Math.cos(t * 0.13);
+    return (
+      <div style={{ position: 'absolute', inset: 0, background: C.bgBot, overflow: 'hidden' }}>
+        <div style={{ position: 'absolute', inset: 0, background: `radial-gradient(1100px 700px at ${x}% ${y}%, rgba(124,58,237,.09), transparent 70%)` }} />
+      </div>
+    );
+  }
   const L = useMemo(() => lines(TH.backdrop.lines), []);
   // integrate scroll speed so boosts accelerate smoothly instead of jumping
   const pos = useMemo(() => {

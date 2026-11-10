@@ -6,6 +6,7 @@ export const FPS = 30;
 export const W = 1920, H = 1080;
 
 export type Theme = {
+  look?: 'tape' | 'film';   // 'film': black backdrop with one slow light, no log tape, no caption bar, no footer; the window rises with a purple glow (the dark investor film)
   brand: { wordmark: string; site: string; url: string };
   colors: Record<string, string>;
   fonts: { sans: string; mono: string };

@@ -38,7 +38,10 @@ const WORKER_TOKEN = process.env.VEP_WORKER_TOKEN || ENV.worker_token;
 const HELP = `vep <command> [episode] ...      (episode = its folder name or a prefix, e.g. ep39; inside an episode folder it can be left out)
 
   list                          episodes of this project and what each one has
-  new <name>                    start an episode folder (SCRIPT.md, narration.json, storyboard.json, clips/)
+  new <name> [--raw <file.mp4>] start an episode folder (SCRIPT.md, narration.json, storyboard.json, clips/; or the project's template/); --raw links a recording to cut from
+  ingest <ep>                   analyse <ep>/raw/*.mp4: dead air, scene changes, contact sheets, transcript -> <ep>/ingest/  (heavy)
+  plan <ep>                     plan.json (raw ranges per scene + narration blocks) -> cuts.json + storyboard.json
+  cut <ep>                      cuts.json -> trimmed, cropped clips in <ep>/clips/  (heavy, NVENC on the render machine)
   voice <ep> [block ...]        synthesize narration.json (cached per block; FORCE=1 to redo, REALIGN=1 to re-time only)
   upload <ep> [--all] [--folder] upload the approved FINAL video to the project's Google Drive folder (video.json "upload"; only after the owner approves it); --all adds captions + thumbnail, --folder puts them in a new subfolder named by the episode's FOLDER file
   check <ep>                    pack, then check: sentences never cut, gaps between sentences, picture speeds, captions inside the voice
@@ -263,15 +266,62 @@ const commands = {
       console.log(n.padEnd(28), [has(path.join(d, 'SCRIPT.md')), has(path.join(d, 'narration.json')), has(path.join(a, 'voice/blocks.json')), has(path.join(d, 'clips')), has(path.join(a, 'scaled/clips.json')), has(path.join(d, 'storyboard.json')), has(o)].map((x, i) => x.padEnd([6, 9, 5, 5, 6, 10, 5][i])).join(' '));
     }
   },
-  new(P, name) {
-    if (!name) die('vep new <name>   e.g. vep new ep22-drive-sync');
+  new(P, name, ...flags) {
+    if (!name) die('vep new <name> [--raw <recording.mp4>]   e.g. vep new ep22-drive-sync');
     const d = path.join(P.episodes, name);
     if (fs.existsSync(d)) die(`${d} already exists`);
     fs.mkdirSync(path.join(d, 'clips'), { recursive: true });
-    fs.writeFileSync(path.join(d, 'SCRIPT.md'), `# ${name}\n\n## Problem (1 to 2 sentences)\n\n## How the product solves it\n\n## Shot list\n\n## Narration\n\n## Open questions\n`);
-    fs.writeFileSync(path.join(d, 'narration.json'), JSON.stringify({ blocks: [{ id: 'n01', text: '' }] }, null, 2) + '\n');
-    fs.writeFileSync(path.join(d, 'storyboard.json'), JSON.stringify({ labels: [], scenes: [{ type: 'title', id: 'title', blocks: ['n01'], eyebrow: '', line1: '', line2: '' }, { type: 'end', id: 'end', len: 6, line1: '', line2: '', cta: '', card: true }] }, null, 2) + '\n');
+    const tpl = path.join(P.dir, P.cfg.template || 'template');   // a project may keep a template/ folder: copied into every new episode (__NAME__ is replaced)
+    if (fs.existsSync(tpl)) {
+      const copy = (from, to) => { fs.mkdirSync(to, { recursive: true }); for (const e of fs.readdirSync(from, { withFileTypes: true })) { const a = path.join(from, e.name), b = path.join(to, e.name); if (e.isDirectory()) copy(a, b); else fs.writeFileSync(b, fs.readFileSync(a, 'utf8').replaceAll('__NAME__', name)); } };
+      copy(tpl, d);
+    } else {
+      fs.writeFileSync(path.join(d, 'SCRIPT.md'), `# ${name}\n\n## Problem (1 to 2 sentences)\n\n## How the product solves it\n\n## Shot list\n\n## Narration\n\n## Open questions\n`);
+      fs.writeFileSync(path.join(d, 'narration.json'), JSON.stringify({ blocks: [{ id: 'n01', text: '' }] }, null, 2) + '\n');
+      fs.writeFileSync(path.join(d, 'storyboard.json'), JSON.stringify({ labels: [], scenes: [{ type: 'title', id: 'title', blocks: ['n01'], eyebrow: '', line1: '', line2: '' }, { type: 'end', id: 'end', len: 6, line1: '', line2: '', cta: '', card: true }] }, null, 2) + '\n');
+    }
+    const ri = flags.indexOf('--raw');
+    if (ri >= 0) {   // the raw recording(s) to cut from: linked, never copied or moved
+      const src = path.resolve(flags[ri + 1] || ''); if (!fs.existsSync(src)) die(`--raw: ${src} not found`);
+      fs.mkdirSync(path.join(d, 'raw'), { recursive: true });
+      fs.symlinkSync(src, path.join(d, 'raw', path.basename(src)));
+    }
     console.log(`created ${d}`);
+  },
+  /** raw recording → what is in it (dead air, scene changes, contact sheets) + a transcript, in <ep>/ingest/  (heavy part on the render machine) */
+  async ingest(P, ep) {
+    const E = findEpisode(P, ep), raw = path.join(E.dir, 'raw'), tmp = path.join(E.art, '.ingest'), out = path.join(E.dir, 'ingest');
+    const vids = fs.existsSync(raw) ? fs.readdirSync(raw).filter((x) => /\.(mp4|mov|mkv|webm)$/i.test(x)).sort() : [];
+    if (!vids.length) die(`no recordings in ${raw} (vep new <name> --raw <file>)`);
+    await heavy('ingest', raw, vids, tmp, {});
+    fs.mkdirSync(out, { recursive: true });
+    for (const f of fs.readdirSync(tmp)) fs.copyFileSync(path.join(tmp, f), path.join(out, f));
+    fs.rmSync(tmp, { recursive: true, force: true });
+    for (const a of fs.readdirSync(out).filter((x) => x.endsWith('.audio.mp3'))) run('python3', [path.join(COMPOSE, 'tools/transcribe.py'), path.join(out, a), path.join(out, a.replace('.audio.mp3', ''))], { env: { ...process.env, DEEPGRAM_KEY: ENV.deepgram || '' } });
+    console.log('ingest written to', out);
+  },
+  /** plan.json (raw time ranges per scene + narration blocks) → cuts.json (what to cut) + storyboard.json */
+  plan(P, ep) {
+    const E = findEpisode(P, ep);
+    run('node', [path.join(COMPOSE, 'tools/plan.mjs'), E.dir]);
+  },
+  /** cuts.json → the trimmed, cropped clips in <ep>/clips/  (heavy: on the render machine, NVENC) */
+  async cut(P, ep) {
+    const E = findEpisode(P, ep), cf = path.join(E.dir, 'cuts.json');
+    if (!fs.existsSync(cf)) die(`no cuts.json (vep plan ${E.name})`);
+    const cuts = readJSON(cf), src = path.resolve(E.dir, cuts.source), stage = path.join(E.art, '.cutin'), tmp = path.join(E.art, '.cut');
+    fs.rmSync(stage, { recursive: true, force: true }); fs.mkdirSync(stage, { recursive: true });
+    fs.symlinkSync(src, path.join(stage, path.basename(src)));
+    fs.writeFileSync(path.join(stage, 'cuts.json'), JSON.stringify({ ...cuts, src: path.basename(src) }));
+    await heavy('cut', stage, [path.basename(src), 'cuts.json'], tmp, {});
+    const clips = path.join(E.dir, 'clips'); fs.mkdirSync(clips, { recursive: true });
+    const prev = path.join(clips, '.cut-made.json');   // clips an earlier cut made are replaced; recorded clips are never touched
+    if (fs.existsSync(prev)) for (const f of readJSON(prev)) fs.rmSync(path.join(clips, f), { force: true });
+    const made = fs.readdirSync(tmp).filter((x) => x.endsWith('.mp4'));
+    for (const f of made) fs.copyFileSync(path.join(tmp, f), path.join(clips, f));
+    fs.writeFileSync(prev, JSON.stringify(made));
+    fs.rmSync(tmp, { recursive: true, force: true }); fs.rmSync(stage, { recursive: true, force: true });
+    console.log(`${made.length} clips in ${clips}`);
   },
   voice(P, ep, ...only) {
     const E = findEpisode(P, ep);

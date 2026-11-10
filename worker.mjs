@@ -12,7 +12,7 @@
 // A render job is a folder: public/ (theme assets, scaled clips, voice), scenes/ (the project's index.tsx, optional), props.json,
 // captions.srt. The Remotion bundle is built here (webpack cache off, so nothing is kept in node_modules).
 import { createRequire } from 'module';
-import { execFileSync } from 'child_process';
+import { execFileSync, spawn } from 'child_process';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -68,11 +68,78 @@ export async function stills(jobDir, outDir, { frames = [], thumb = false, gl = 
   } finally { await browser.close({ silent: true }); }
 }
 
-export const TASKS = { scale: (i, o, opts, tmp, log) => scale(i, o, opts, log), render, frames: stills };
+// ---------------------------------------------------------------- raw recordings: analyse (ingest) and trim (cut)
+const VIDEO = /\.(mp4|mov|mkv|webm)$/i;
+const ff = (args) => new Promise((ok, no) => {
+  const p = spawn('ffmpeg', ['-hide_banner', '-nostats', '-y', ...args], { stdio: ['ignore', 'ignore', 'pipe'] });
+  let err = '';
+  p.stderr.on('data', (d) => { err += d; if (err.length > 4e6) err = err.slice(-2e6); });
+  p.on('close', (c) => (c === 0 ? ok(err) : no(new Error(`ffmpeg failed (${c}): ${err.slice(-500)}`))));
+});
+const probe = (f) => +parseFloat(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', f]).toString()).toFixed(2);
+const pairs = (text, a, b, end) => { const out = []; let s = null; for (const m of text.matchAll(new RegExp(`${a}:\\s*([\\d.]+)|${b}:\\s*([\\d.]+)`, 'g'))) { if (m[1] !== undefined) s = +m[1]; else if (s !== null) { out.push([+s.toFixed(2), +(+m[2]).toFixed(2)]); s = null; } } if (s !== null) out.push([+s.toFixed(2), end]); return out; };
+
+/** raw recordings → what is in them: silences, frozen-picture spans (waiting), scene changes, contact sheets, an audio file for
+ *  transcription. Runs on the render machine (decoding a 10-minute recording five ways is the heavy part). */
+export async function ingest(inDir, outDir, { every = 10, silenceDb = -35, silenceMin = 0.6, freezeMin = 1.5 } = {}, tmp, log = console.log) {
+  fs.mkdirSync(outDir, { recursive: true });
+  for (const f of fs.readdirSync(inDir).filter((x) => VIDEO.test(x)).sort()) {
+    const src = path.join(inDir, f), base = f.replace(/\.[^.]+$/, ''), duration = probe(src);
+    log(`ingest ${f} (${duration}s)`);
+    const label = `drawtext=text='%{pts\\:hms}':x=6:y=6:fontsize=18:fontcolor=white:box=1:boxcolor=black@0.6`;
+    const [sil, frz, scn] = await Promise.all([
+      ff(['-i', src, '-vn', '-af', `silencedetect=n=${silenceDb}dB:d=${silenceMin}`, '-f', 'null', '-']),
+      ff(['-i', src, '-an', '-vf', `fps=10,scale=480:-2,freezedetect=n=0.003:d=${freezeMin}`, '-f', 'null', '-']),
+      ff(['-i', src, '-an', '-vf', `fps=4,scale=480:-2,select='gt(scene,0.06)',showinfo`, '-f', 'null', '-']),
+      ff(['-i', src, '-vn', '-ac', '1', '-ar', '16000', '-c:a', 'libmp3lame', '-b:a', '48k', path.join(outDir, `${base}.audio.mp3`)]),
+      ff(['-i', src, '-an', '-vf', `fps=1/${every},scale=384:216,${label},tile=6x8`, path.join(outDir, `${base}.sheet-%02d.png`)]),
+    ]);
+    const info = {
+      name: base, duration, sheetEvery: every,
+      silences: pairs(sil, 'silence_start', 'silence_end', duration),
+      freezes: pairs(frz, 'freeze_start', 'freeze_end', duration),
+      scenes: [...scn.matchAll(/pts_time:([\d.]+)/g)].map((m) => +(+m[1]).toFixed(2)),
+      sheets: fs.readdirSync(outDir).filter((x) => x.startsWith(`${base}.sheet-`)).sort(),
+    };
+    fs.writeFileSync(path.join(outDir, `${base}.ingest.json`), JSON.stringify(info, null, 1));
+    log(`  ${info.freezes.length} frozen spans, ${info.silences.length} silences, ${info.scenes.length} scene changes, ${info.sheets.length} sheets`);
+  }
+}
+
+/** a cut list → clips: for each clip the kept ranges of the raw recording, cropped to the app window, joined (dead air gone).
+ *  Each range is its own seek + encode (fast, constant memory), then the parts are joined without re-encoding. NVENC when the machine has it. */
+export async function cut(inDir, outDir, { fps = 30 } = {}, tmp, log = console.log) {
+  fs.mkdirSync(outDir, { recursive: true });
+  const spec = JSON.parse(fs.readFileSync(path.join(inDir, 'cuts.json'), 'utf8'));
+  const nv = /h264_nvenc/.test(execFileSync('ffmpeg', ['-hide_banner', '-encoders']).toString());
+  const enc = (useNv) => (useNv ? ['-c:v', 'h264_nvenc', '-preset', 'p5', '-rc', 'vbr', '-cq', '14', '-b:v', '0'] : ['-c:v', 'libx264', '-preset', 'fast', '-crf', '12']);
+  let useNv = nv;
+  const work = path.join(tmp, 'parts');
+  fs.mkdirSync(work, { recursive: true });
+  for (const c of spec.clips) {
+    const src = path.join(inDir, c.src || spec.src), [x, y, w, h] = c.crop || spec.crop || [0, 0, 0, 0];
+    const vf = [...(w ? [`crop=${w}:${h}:${x}:${y}`] : []), `fps=${fps}`, 'format=yuv420p'].join(',');
+    const parts = [];
+    for (const [i, [a, b]] of c.keep.entries()) {
+      const part = path.join(work, `${c.name}.${String(i).padStart(3, '0')}.mp4`);
+      const args = ['-ss', String(a), '-i', src, '-t', String(+(b - a).toFixed(3)), '-an', '-vf', vf];
+      try { await ff([...args, ...enc(useNv), '-movflags', '+faststart', part]); }
+      catch (e) { if (!useNv) throw e; log('  NVENC failed, using x264: ' + String(e.message).split('\n')[0]); useNv = false; await ff([...args, ...enc(false), '-movflags', '+faststart', part]); }
+      parts.push(part);
+    }
+    const list = path.join(work, `${c.name}.txt`);
+    fs.writeFileSync(list, parts.map((p) => `file '${p}'`).join('\n'));
+    await ff(['-f', 'concat', '-safe', '0', '-i', list, '-c', 'copy', '-movflags', '+faststart', path.join(outDir, `${c.name}.mp4`)]);
+    for (const p of parts) fs.unlinkSync(p);
+    log(`cut ${c.name}.mp4 ${probe(path.join(outDir, `${c.name}.mp4`))}s from ${c.keep.length} range(s)${useNv ? ' (nvenc)' : ''}`);
+  }
+}
+
+export const TASKS = { scale: (i, o, opts, tmp, log) => scale(i, o, opts, log), render, frames: stills, ingest, cut };
 
 if (process.argv[1] && fs.realpathSync(process.argv[1]) === fs.realpathSync(new URL(import.meta.url).pathname)) {
   const [task, inDir, outDir, opts = '{}'] = process.argv.slice(2);
-  if (!TASKS[task] || !inDir || !outDir) { console.error('usage: node worker.mjs scale|render|frames <in dir> <out dir> [json options]'); process.exit(1); }
+  if (!TASKS[task] || !inDir || !outDir) { console.error('usage: node worker.mjs scale|render|frames|ingest|cut <in dir> <out dir> [json options]'); process.exit(1); }
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'vep-'));
   try { await TASKS[task](path.resolve(inDir), path.resolve(outDir), JSON.parse(opts), tmp); }
   finally { fs.rmSync(tmp, { recursive: true, force: true }); }

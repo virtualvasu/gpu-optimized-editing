@@ -8,7 +8,7 @@
 //   env: VEP_WORKER_PORT (8787), VEP_WORKER_BIND (0.0.0.0), VEP_WORKER_TMP (/dev/shm, else the system temp folder)
 //
 //   GET    /health               { ok, busy, cpus, gpu, tmpFreeGB }
-//   POST   /jobs?task=scale|render|frames&opts=<json>   body: a tar of the job's input folder  → 202 { id }   (409 when busy)
+//   POST   /jobs?task=scale|render|frames|ingest|cut&opts=<json>   body: a tar of the job's input folder  → 202 { id }   (409 when busy)
 //   GET    /jobs/<id>?since=<n>  { state: running|done|failed, log: [lines after n], next, error }
 //   GET    /jobs/<id>/result     a tar of the output folder; the job folder is deleted once it is sent
 //   DELETE /jobs/<id>            cancel and delete
@@ -24,7 +24,7 @@ const HERE = path.dirname(fs.realpathSync(new URL(import.meta.url).pathname));
 const TOKEN = process.env.VEP_WORKER_TOKEN;
 const PORT = +(process.env.VEP_WORKER_PORT || 8787), BIND = process.env.VEP_WORKER_BIND || '0.0.0.0';
 const RESULT_TTL = 60 * 60 * 1000;   // an uncollected result is deleted after an hour
-const TASKS = ['scale', 'render', 'frames'];
+const TASKS = ['scale', 'render', 'frames', 'ingest', 'cut'];
 if (!TOKEN || TOKEN.length < 16) { console.error('set VEP_WORKER_TOKEN (16+ characters; the same value goes in the laptop\'s .env as worker_token)'); process.exit(1); }
 
 /** a fingerprint of the engine files that shape a render (the worker must run the same engine as the machine that packs the job) */

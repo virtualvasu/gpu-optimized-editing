@@ -49,7 +49,8 @@ export const Story: React.FC<StoryProps> = ({ theme, storyboard: sb, blocks, cli
         if (!Custom) throw new Error(`scene ${sc.id}: unknown scene type "${sc.type}" (add it to the project's scenes/index.tsx)`);
         const cues: Record<string, number> = {};
         for (const k of Object.keys(sc.cues || {})) { const [b, w, n] = sc.cues[k]; cues[k] = at(BLOCKS, sc, b, w, n ?? 0); }
-        return seq(sc, <Custom dur={d} {...cues} />);
+        // `scene` = this scene's own storyboard entry, so a project scene can be data-driven (graph, problem, stats) instead of baked in
+        return seq(sc, <Custom dur={d} scene={sc} {...cues} />);
       })}
       <Chrome intervals={chrome} total={TOTAL} labels={sb.labels} />
       <Captions chunks={chunks} />

@@ -49,11 +49,11 @@ const HL: React.FC<{ h: Highlight; t: number }> = ({ h, t }) => {
     <>{tick}
       {dim > 0 && <div style={{ position: 'absolute', left: L, top: T, width: BW, height: BH, borderRadius: 16, opacity: a, pointerEvents: 'none', boxShadow: `0 0 0 4000px ${rgba(C.bgBot, dim * a)}` }} />}
       <div style={{ position: 'absolute', left: L, top: T, width: BW, height: BH, borderRadius: 16, opacity: a, pointerEvents: 'none',
-        border: `3px solid ${col}`, boxShadow: `0 0 ${24 * pulse}px ${rgba(col, .7)}, inset 0 0 ${16 * pulse}px ${rgba(col, .16)}` }} />
+        border: `3px solid ${col}`, boxShadow: TH.look === 'clean' ? `0 0 0 5px ${rgba(col, .16)}` : `0 0 ${24 * pulse}px ${rgba(col, .7)}, inset 0 0 ${16 * pulse}px ${rgba(col, .16)}` }} />
       {pill && h.label && (
         <div style={{ position: 'absolute', ...pill, height: PH, opacity: a, transform: `translateY(${slide}px)`, pointerEvents: 'none', display: 'flex', alignItems: 'center', gap: 14, padding: '0 26px', borderRadius: 99,
-          background: rgba(C.bgTop, .96), border: `1px solid ${rgba(col, .45)}`, boxShadow: `0 10px 36px rgba(0,0,0,.5), 0 0 28px ${rgba(col, .3)}`, fontFamily: FONT, fontSize: FS, fontWeight: 700, color: C.text, whiteSpace: 'nowrap' }}>
-          <span style={{ width: 14, height: 14, borderRadius: 99, background: col, boxShadow: `0 0 12px ${col}`, flex: 'none' }} />{h.label}
+          background: rgba(C.bgTop, .96), border: `1px solid ${rgba(col, .45)}`, boxShadow: `0 10px 36px rgba(0,0,0,.5)${TH.look === 'clean' ? '' : `, 0 0 28px ${rgba(col, .3)}`}`, fontFamily: FONT, fontSize: FS, fontWeight: 700, color: C.text, whiteSpace: 'nowrap' }}>
+          <span style={{ width: 14, height: 14, borderRadius: 99, background: col, boxShadow: TH.look === 'clean' ? 'none' : `0 0 12px ${col}`, flex: 'none' }} />{h.label}
         </div>
       )}
     </>
@@ -83,7 +83,7 @@ export const MacScreen: React.FC<{ dur: number; src: string; segs: Seg[]; zooms?
     } : {
       position: 'absolute', left: MAC.x, top: MAC.y, width: MAC.w, height: MAC.h + MAC.bar, borderRadius: MAC.radius,
       opacity: inP * (1 - outP), transform: `translateY(${(1 - inP) * 26 - outP * 24}px) scale(${scale})`, filter: (1 - inP) * 14 + outP * 12 > 0.05 ? `blur(${(1 - inP) * 14 + outP * 12}px)` : 'none',
-      boxShadow: `0 50px 120px rgba(0,0,0,.7), 0 0 0 1px rgba(255,255,255,.12), 0 0 150px ${rgba(C.accent, .17)}`,
+      boxShadow: `0 50px 120px rgba(0,0,0,.7), 0 0 0 1px rgba(255,255,255,.12)${TH.look === 'clean' ? '' : `, 0 0 150px ${rgba(C.accent, .17)}`}`,
     };
 
     const keys = [{ t: 0, z: 1, fx: 960, fy: 540 }, ...zooms].sort((a, b) => a.t - b.t);

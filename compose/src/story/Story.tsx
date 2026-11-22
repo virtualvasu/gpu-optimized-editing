@@ -22,7 +22,7 @@ export const Story: React.FC<StoryProps> = ({ theme, storyboard: sb, blocks, cli
   const { BLOCKS, TIMELINE, TOTAL } = useMemo(() => buildTimeline(sb, blocks, clips), [sb, blocks, clips]);
   const frames = sec(TOTAL);
 
-  const chunks = useMemo(() => buildChunks(TIMELINE.flatMap((sc) => sc.phrases.map((p) => ({ start: sc.start + p.A - p.a0, words: BLOCKS[p.b].words.filter((w) => w.s >= p.a0 - 0.06 && w.s < p.a1 + 0.06) })))), [TIMELINE, BLOCKS]);
+  const chunks = useMemo(() => buildChunks(TIMELINE.filter((sc) => !sc.noCaptions).flatMap((sc) => sc.phrases.map((p) => ({ start: sc.start + p.A - p.a0, words: BLOCKS[p.b].words.filter((w) => w.s >= p.a0 - 0.06 && w.s < p.a1 + 0.06) })))), [TIMELINE, BLOCKS]);
   const prepped = useMemo(() => TIMELINE.map((sc) => (sc.type === 'screen' ? prepScreen(BLOCKS, sc) : null)), [TIMELINE, BLOCKS]);
   const trans = TIMELINE.map((sc) => sec(sc.start + 0.3));
   const voIv = TIMELINE.flatMap((sc) => sc.phrases.map((p) => [sec(sc.start + p.A), sec(sc.start + p.A + (p.a1 - p.a0))] as const));

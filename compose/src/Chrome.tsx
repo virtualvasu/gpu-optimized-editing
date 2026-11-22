@@ -1,6 +1,6 @@
 import React from 'react';
 import { interpolate, useCurrentFrame } from 'remotion';
-import { C, FONT, FPS, TH, W, rgba } from './theme';
+import { C, FONT, FPS, TH, W, rgba, isClean, glow } from './theme';
 import { LogoMark } from './scenes';
 
 export type Interval = { from: number; to: number; label: string; idx: number };
@@ -22,7 +22,7 @@ export const Chrome: React.FC<{ intervals: Interval[]; total: number; labels: st
       </div>
       <div style={{ position: 'absolute', right: 128, top: 1008, height: 38, display: 'flex', alignItems: 'center', gap: 14 }}>
         <div style={{ display: 'flex', gap: 5 }}>
-          {labels.map((_, i) => <div key={i} style={{ width: i === cur!.idx ? 22 : 8, height: 5, borderRadius: 3, background: i === cur!.idx ? C.accent : i < cur!.idx ? rgba(C.accentSoft, .5) : 'rgba(255,255,255,.16)', boxShadow: i === cur!.idx ? `0 0 10px ${C.accent}` : 'none' }} />)}
+          {labels.map((_, i) => <div key={i} style={{ width: i === cur!.idx ? 22 : 8, height: 5, borderRadius: 3, background: i === cur!.idx ? (isClean() ? C.text : C.accent) : i < cur!.idx ? (isClean() ? 'rgba(255,255,255,.5)' : rgba(C.accentSoft, .5)) : 'rgba(255,255,255,.16)', boxShadow: i === cur!.idx ? glow(C.accent, 10) : 'none' }} />)}
         </div>
         <span style={{ fontSize: 20, fontWeight: 600, letterSpacing: 2.2, color: C.muted, textTransform: 'uppercase' }}>{cur.label}</span>
       </div>

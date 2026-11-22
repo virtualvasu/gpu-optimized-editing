@@ -93,9 +93,9 @@ export function buildTimeline(sb: Storyboard, rawBlocks: Record<string, any>, cl
       let cur = sc.lead ?? 0.7;
       for (const b of sc.blocks as string[]) {
         if (!BLOCKS[b]) throw new Error(`scene ${sc.id}: narration block "${b}" not found`);
-        phrases.push({ b, A: cur, a0: 0, a1: BLOCKS[b].duration }); cur += BLOCKS[b].duration + GAP;
+        phrases.push({ b, A: cur, a0: 0, a1: BLOCKS[b].duration }); cur += BLOCKS[b].duration + (sc.gap ?? GAP);
       }
-      len = cur - GAP + (sc.tail ?? 1.0);
+      len = cur - (sc.gap ?? GAP) + (sc.tail ?? 1.0);
     }
     out.push({ ...sc, start, len, phrases, segs });
     prevEnd = start + len;

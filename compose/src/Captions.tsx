@@ -33,7 +33,7 @@ export const Captions: React.FC<{ chunks: Chunk[]; hidden?: (t: number) => numbe
         {ch.words.map((w, i) => {
           const cur = t >= w.s && t <= w.e + 0.04, past = t > w.e + 0.04;
           return (
-            <span key={i} style={{ color: cur ? C.accentSoft : past ? C.text : 'rgba(255,255,255,.42)', transform: cur ? 'translateY(-1px)' : 'none', textShadow: cur ? `0 0 18px ${C.accent}, 0 2px 14px rgba(0,0,0,.7)` : undefined }}>{w.t}</span>
+            <span key={i} style={{ color: cur ? C.accentSoft : past ? C.text : 'rgba(255,255,255,.42)', transform: cur ? 'translateY(-1px)' : 'none', textShadow: cur ? (TH.look === 'clean' ? '0 2px 14px rgba(0,0,0,.7)' : `0 0 18px ${C.accent}, 0 2px 14px rgba(0,0,0,.7)`) : undefined }}>{w.t}</span>
           );
         })}
       </div>

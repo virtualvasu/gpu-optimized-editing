@@ -6,7 +6,7 @@ export const FPS = 30;
 export const W = 1920, H = 1080;
 
 export type Theme = {
-  look?: 'tape' | 'film';   // 'film': black backdrop with one slow light, no log tape, no caption bar, no footer; the window rises with a purple glow (the dark investor film)
+  look?: 'tape' | 'film' | 'clean';   // 'clean' (2026-11-12): flat neutral ground, no glows/gradients/log tape, plain two-tone headlines (white + grey), one restrained accent, Apple/Google product-film style. 'film': black backdrop with one slow light, no log tape, no caption bar, no footer; the window rises with a purple glow (the dark investor film)
   brand: { wordmark: string; site: string; url: string };
   colors: Record<string, string>;
   fonts: { sans: string; mono: string };
@@ -48,6 +48,11 @@ export const applyTheme = (t: Theme) => {
   loadGoogleFont(t.fonts.sans, [400, 500, 600, 700, 800]);
   loadGoogleFont(t.fonts.mono, [400, 500]);
 };
+
+/** true in the clean look: no glows, gradients or tinted panels */
+export const isClean = () => TH.look === 'clean';
+/** a glow (one box-shadow part): `0 0 <blur>px <color>`; in the clean look an invisible no-op so it still fits inside a comma list */
+export const glow = (color: string, blur: number) => (isClean() ? '0 0 0 0 transparent' : `0 0 ${blur}px ${color}`);
 
 /** a theme colour (#RRGGBB) at an opacity */
 export const rgba = (hex: string, a: number) => `rgba(${parseInt(hex.slice(1, 3), 16)},${parseInt(hex.slice(3, 5), 16)},${parseInt(hex.slice(5, 7), 16)},${a})`;

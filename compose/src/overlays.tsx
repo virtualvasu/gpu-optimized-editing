@@ -1,6 +1,6 @@
 import React from 'react';
 import { interpolate, spring } from 'remotion';
-import { C, FONT, MONO, FPS, TH, clamp, easeOut, rgba } from './theme';
+import { C, FONT, MONO, FPS, TH, clamp, easeOut, rgba, isClean, glow } from './theme';
 
 // Explainer overlays that sit on the card (screen-space, not zoomed): comparison boxes, hand-off chains, badges, callouts
 // (a detail read out large next to the box it comes from) and a step tracker.
@@ -16,7 +16,7 @@ export type OverlaySpec =
   | { kind: 'steps'; items: string[]; done?: number; ticks?: number[]; at: number; dur: number };
 
 const clampO = { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' } as const;
-const glass = (): React.CSSProperties => ({ background: 'rgba(8,6,16,.9)', border: `1px solid ${rgba(C.accentSoft, .28)}`, backdropFilter: 'blur(8px)', boxShadow: '0 18px 60px rgba(0,0,0,.55)' });
+const glass = (): React.CSSProperties => ({ background: isClean() ? 'rgba(18,18,20,.94)' : 'rgba(8,6,16,.9)', border: `1px solid ${isClean() ? 'rgba(255,255,255,.14)' : rgba(C.accentSoft, .28)}`, backdropFilter: 'blur(8px)', boxShadow: '0 18px 60px rgba(0,0,0,.55)' });
 
 // A detail from the recording, read out large: a line is drawn from the box (clip pixels, 1920x1080) to a card beside it, and
 // the card's lines type in (each at its own cue, or one after another). The recording stays whole; only the reading gets easier.
@@ -54,7 +54,7 @@ const Callout: React.FC<{ o: Extract<OverlaySpec, { kind: 'callout' }>; t: numbe
         <line x1={p0[0]} y1={p0[1]} x2={p0[0] + (p1[0] - p0[0]) * draw} y2={p0[1] + (p1[1] - p0[1]) * draw} stroke={col} strokeWidth={3} strokeLinecap="round" style={{ filter: `drop-shadow(0 0 6px ${col})` }} />
       </svg>
       <div style={{ position: 'absolute', ...pos, opacity: card, transform: `${shift} scale(${0.96 + 0.04 * card})` }}>
-        <div style={{ ...glass(), maxWidth: o.width ?? 640, padding: '18px 26px 20px', borderRadius: 18, border: `2px solid ${col}`, boxShadow: `0 18px 60px rgba(0,0,0,.55), 0 0 36px ${rgba(C.accent, .35)}` }}>
+        <div style={{ ...glass(), maxWidth: o.width ?? 640, padding: '18px 26px 20px', borderRadius: 18, border: `2px solid ${col}`, boxShadow: `0 18px 60px rgba(0,0,0,.55), ${glow(rgba(C.accent, .35), 36)}` }}>
           {o.head && <div style={{ fontFamily: FONT, fontSize: 16, fontWeight: 700, letterSpacing: 4, color: col, textTransform: 'uppercase', marginBottom: o.value || lines.length ? 10 : 0 }}>{o.head}</div>}
           {o.value && <div style={{ fontFamily: FONT, fontSize: 60, fontWeight: 800, letterSpacing: -1.5, lineHeight: 1, color: C.text, opacity: val, transform: `translateY(${(1 - val) * 10}px)`, marginBottom: lines.length ? 12 : 0 }}>{o.value}</div>}
           {lines.map((l, i) => {
@@ -92,7 +92,7 @@ const Steps: React.FC<{ o: Extract<OverlaySpec, { kind: 'steps' }>; t: number }>
               {i > 0 && <div style={{ fontFamily: FONT, fontSize: 22, fontWeight: 700, color: C.dim }}>›</div>}
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <div style={{ width: 32, height: 32, borderRadius: 99, display: 'flex', alignItems: 'center', justifyContent: 'center', background: d > 0.5 ? rgba(C.green, .2) : act > 0.5 ? C.accent : 'rgba(255,255,255,.06)',
-                  border: `2px solid ${col}`, boxShadow: act > 0.5 ? `0 0 ${18 * act}px ${C.accent}` : d > 0.5 ? `0 0 14px ${rgba(C.green, .5)}` : 'none', fontFamily: FONT, fontSize: 17, fontWeight: 800, color: C.text }}>
+                  border: `2px solid ${col}`, boxShadow: act > 0.5 ? glow(C.accent, 18 * act) : d > 0.5 ? glow(rgba(C.green, .5), 14) : 'none', fontFamily: FONT, fontSize: 17, fontWeight: 800, color: C.text }}>
                   {d > 0.5 ? <svg width="18" height="18" viewBox="0 0 52 52"><path d="M12 27 L22 37 L41 15" fill="none" stroke={C.green} strokeWidth="7" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="60" strokeDashoffset={60 * (1 - d)} /></svg> : i + 1}
                 </div>
                 <div style={{ fontFamily: FONT, fontSize: 21, fontWeight: act > 0.5 ? 800 : 600, color: act > 0.5 || d > 0.5 ? C.text : C.muted, whiteSpace: 'nowrap' }}>{it}</div>
@@ -106,7 +106,7 @@ const Steps: React.FC<{ o: Extract<OverlaySpec, { kind: 'steps' }>; t: number }>
 };
 
 const CardView: React.FC<{ c: Card; p: number }> = ({ c, p }) => (
-  <div style={{ opacity: p, transform: `translateY(${(1 - p) * 14}px) scale(${0.94 + 0.06 * p})`, minWidth: 250, padding: '16px 28px', borderRadius: 16, background: rgba(C.bgTop, .97), border: `2px solid ${c.color}`, boxShadow: `0 0 34px ${c.color}55` }}>
+  <div style={{ opacity: p, transform: `translateY(${(1 - p) * 14}px) scale(${0.94 + 0.06 * p})`, minWidth: 250, padding: '16px 28px', borderRadius: 16, background: rgba(C.bgTop, .97), border: `2px solid ${c.color}`, boxShadow: glow(`${c.color}55`, 34) }}>
     <div style={{ fontFamily: FONT, fontSize: 18, fontWeight: 700, letterSpacing: 3, color: c.color, marginBottom: c.body ? 8 : 0 }}>{c.head}</div>
     {c.body && <div style={{ fontFamily: c.mono ? MONO : FONT, fontSize: c.mono ? 34 : 30, fontWeight: c.mono ? 500 : 600, color: C.text, whiteSpace: 'nowrap' }}>{c.body}</div>}
   </div>
@@ -121,8 +121,8 @@ export const Overlay: React.FC<{ o: OverlaySpec; t: number }> = ({ o, t }) => {
     if (a <= 0.01) return null;
     return (
       <div style={{ position: 'absolute', left: 28, bottom: 28, display: 'flex', alignItems: 'center', gap: 16, padding: '14px 26px 14px 18px', borderRadius: 18, opacity: a * (0.4 + 0.6 * p), transform: `translateY(${(1 - p) * 18}px)`,
-        background: 'rgba(12,9,24,.94)', border: `1px solid ${rgba(C.accentSoft, .38)}`, boxShadow: `0 14px 40px rgba(0,0,0,.55), 0 0 30px ${rgba(C.accent, .25)}` }}>
-        <div style={{ width: 12, height: 12, borderRadius: 6, background: C.accentSoft, boxShadow: `0 0 0 6px ${rgba(C.accent, .22)}`, flex: 'none' }} />
+        background: isClean() ? 'rgba(18,18,20,.95)' : 'rgba(12,9,24,.94)', border: `1px solid ${isClean() ? 'rgba(255,255,255,.16)' : rgba(C.accentSoft, .38)}`, boxShadow: `0 14px 40px rgba(0,0,0,.55), ${glow(rgba(C.accent, .25), 30)}` }}>
+        <div style={{ width: 12, height: 12, borderRadius: 6, background: C.accentSoft, boxShadow: isClean() ? 'none' : `0 0 0 6px ${rgba(C.accent, .22)}`, flex: 'none' }} />
         <div>
           <div style={{ fontFamily: FONT, fontSize: 27, fontWeight: 700, color: C.text, letterSpacing: -0.2 }}>{o.text}</div>
           {o.sub ? <div style={{ fontFamily: FONT, fontSize: 18, color: C.muted, marginTop: 2 }}>{o.sub}</div> : null}
@@ -135,8 +135,8 @@ export const Overlay: React.FC<{ o: OverlaySpec; t: number }> = ({ o, t }) => {
     if (a <= 0.01) return null;
     return (
       <div style={{ position: 'absolute', left: 0, right: 0, top, display: 'flex', justifyContent: 'center', opacity: a, transform: `translateY(${(1 - a) * -16}px)` }}>
-        <div style={{ ...glass(), display: 'flex', alignItems: 'center', gap: 16, padding: '16px 36px', borderRadius: 99, border: `2px solid ${o.color}`, boxShadow: `0 0 40px ${o.color}55`, fontFamily: FONT, fontSize: 36, fontWeight: 800, letterSpacing: 0.5, color: C.text }}>
-          <span style={{ width: 14, height: 14, borderRadius: 99, background: o.color, boxShadow: `0 0 14px ${o.color}` }} />{o.text}
+        <div style={{ ...glass(), display: 'flex', alignItems: 'center', gap: 16, padding: '16px 36px', borderRadius: 99, border: `2px solid ${o.color}`, boxShadow: glow(`${o.color}55`, 40), fontFamily: FONT, fontSize: 36, fontWeight: 800, letterSpacing: 0.5, color: C.text }}>
+          <span style={{ width: 14, height: 14, borderRadius: 99, background: o.color, boxShadow: glow(o.color, 14) }} />{o.text}
         </div>
       </div>
     );
@@ -153,7 +153,7 @@ export const Overlay: React.FC<{ o: OverlaySpec; t: number }> = ({ o, t }) => {
             return (
               <React.Fragment key={i}>
                 {i > 0 && <div style={{ fontSize: 36, fontWeight: 800, color: C.accentSoft, opacity: p }}>→</div>}
-                <div style={{ opacity: p, transform: `translateX(${(1 - p) * -18}px) scale(${0.9 + 0.1 * p})`, fontFamily: FONT, fontSize: 28, fontWeight: 700, color: C.text, padding: '12px 24px', borderRadius: 14, background: rgba(C.bgTop, .97), border: `2px solid ${s.color}`, boxShadow: `0 0 26px ${s.color}55`, whiteSpace: 'nowrap' }}>{s.text}</div>
+                <div style={{ opacity: p, transform: `translateX(${(1 - p) * -18}px) scale(${0.9 + 0.1 * p})`, fontFamily: FONT, fontSize: 28, fontWeight: 700, color: C.text, padding: '12px 24px', borderRadius: 14, background: rgba(C.bgTop, .97), border: `2px solid ${s.color}`, boxShadow: glow(`${s.color}55`, 26), whiteSpace: 'nowrap' }}>{s.text}</div>
               </React.Fragment>
             );
           })}

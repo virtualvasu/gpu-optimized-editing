@@ -97,6 +97,22 @@ API (every call needs `Authorization: Bearer <token>`): `GET /health`; `POST /jo
 tar body → `{ id }` (409 when busy); `GET /jobs/<id>?since=<n>` → state + new log lines; `GET /jobs/<id>/result` → tar (then
 deleted); `DELETE /jobs/<id>`. The token is the only protection: keep the port on the LAN or a VPN, not the open internet.
 
+### The owner's render machine: footprint and speed (owner, 2026-11-07; moved from memory 2026-11-22)
+
+- The render machine (32 cores, RTX 4000 Ada, 31 GB RAM) is a **shared lab machine**. Everything of ours (projects, clips,
+  bundles, renders, temp, cache) lives in `~/vasu/video-editing-pipeline/` and nowhere else (e.g. `projects/<name>`). The one exception: render
+  temp in RAM at `/dev/shm/vep-<project>`, deleted when the render is done.
+- After each render, remove only what is provably ours in /tmp (`remotion-v4*-assets*`, `puppeteer_dev_chrome_profile-*` from our run
+  window). Never blanket-delete `/tmp/.org.chromium.*`. Kill only processes whose cwd is inside our folder. The owner won't run sudo there.
+- Speed for long films (learned on the investor film):
+  - One render process doesn't scale: run about **6** processes on frame-range chunks and concat with `-c copy`
+    (`investor-video/film/tools/chunked.sh`). Eight swapped.
+  - Cap `--offthreadvideo-cache-size-in-bytes=1000000000` per process.
+  - Put TMPDIR on tmpfs: about 11 fps vs 6, but about 7 GB of RAM.
+  - Mix audio with ffmpeg from the timeline (`film/tools/mix.ts`), not Remotion.
+  - Use `OffthreadVideo` (not `@remotion/media` <Video>). The GPU barely helps.
+  - No backdrop blur and no sub-pixel window drift on dimmed UI: it "boils".
+
 ### Speed
 
 Remotion draws frames in headless Chrome, so CPU cores matter most (`--concurrency` defaults to all of them). A GPU can take the
@@ -144,7 +160,7 @@ theme.json>"` and override only some keys (objects merge, lists replace). Asset 
 `{ "provider"?, "voice_id"?, "model"?, "settings"?, "blocks": [{ "id": "n01", "text": "…" }] }`. Providers: `deepgram` (Aura, word
 times by speech-to-text) or ElevenLabs (exact character times; switches to the second key when the first runs out of credits).
 `[[display|spoken]]` shows one thing in captions and says another: `[[emp_id|e m p underscore i d]]`. `FORCE=1 vep voice <ep> n03`
-re-synthesizes one block; `REALIGN=1` keeps the audio and re-measures word times.
+re-synthesizes one block; a block may carry its own `voice_id` (a second speaker, e.g. a simulated call); `REALIGN=1` keeps the audio and re-measures word times.
 
 ### storyboard.json
 
@@ -159,6 +175,7 @@ its nth occurrence.
 | `screen` | `clip`, `chapter`, `url`?; `beats`: `[{ b, w, v, rate?, waits?: [[from, to, rate]] }]` = when word `w` of block `b` is heard, the clip shows time `v`; footage between beats plays at `rate`, dead waits faster; `endV`, `endRate`, `endWaits`; `hl`: `[{ focus: "<mark with a box>" | box: [x,y,w,h], v? \| b+w, dur, tone?, color?, label?, side? }]` highlights (default: dim the rest, glow the box; with the theme's `highlight.style: "ring"`: a coloured frame, no dimming, plus a `label` pill beside the box; `tone` = a name from the theme's `highlight.tones`, `color` = a theme colour key or #RRGGBB, `side` = right\|left\|top\|bottom, default the first that fits); `zv`: `[{ v, z, fx, fy }]` zoom keys; `overlays`: `[{ kind: "badge", text, color, v | b+w, dur, top? }]` (also `duo`, `chain`, `callout`, `steps`, below) |
 | `recap` | `items: [{ b, w, title, sub }]` (each arrives on its word), `cta: { b, w, text }` |
 | `end` | `line1`, `line2`, `cta`, `card`: `true` (the theme's end card) or `{ tagline, accent, url }` |
+| any scene with `blocks` | optional `gap` (seconds between its blocks, default 0.5; e.g. 0.3 for a dialogue) and `noCaptions: true` (the global captions skip it, for a scene that shows the words itself) |
 | anything else | a project scene from `scenes/index.tsx`; `cues: { propName: [block, word, nth?] }` become scene-time props |
 
 Screen overlays for reading details without zooming (every time is `v` (clip time) or `b`+`w` (+`n`, `off`)):

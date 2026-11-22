@@ -21,6 +21,7 @@ function lines(pool: string[][]) {
 
 export const Backdrop: React.FC<{ boosts: number[]; total: number }> = ({ boosts, total }) => {
   const frame = useCurrentFrame();
+  if (TH.look === 'clean') return <div style={{ position: 'absolute', inset: 0, background: C.bgBot }} />;   // flat neutral ground, nothing moves behind the content
   if (TH.look === 'film') {   // near-flat background with one very slow, barely visible light drifting across it
     const t = frame / 30, x = 50 + 18 * Math.sin(t * 0.18), y = 48 + 10 * Math.cos(t * 0.13);
     return (

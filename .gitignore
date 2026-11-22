@@ -5,3 +5,4 @@ output/
 node_modules/
 __pycache__/
 compose/.timeline-*.mjs
+_trash/

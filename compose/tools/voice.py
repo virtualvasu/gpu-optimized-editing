@@ -8,11 +8,15 @@ import deepgram_tts
 
 def parse(text):
     spoken, units = '', []          # units: (display, spoken_start, spoken_end)
-    for part in re.split(r'(\[\[[^\]]+\]\])', text):
+    for part in re.split(r'(\[\[[^\]]+\]\]|\{[^}]+\}|\(\([^)]+\)\))', text):
         if not part: continue
         m = re.match(r'\[\[([^|]+)\|([^\]]+)\]\]', part)
         if m:
             s = len(spoken); spoken += m.group(2); units.append((m.group(1), s, len(spoken)))
+        elif part.startswith('{') and part.endswith('}'):
+            spoken += '[' + part[1:-1] + '] '          # ElevenLabs v3 audio tag (a sigh, a breath, a feeling): heard, never shown
+        elif part.startswith('((') and part.endswith('))'):
+            spoken += part[2:-2] + ' '                 # a spoken filler or pause ("um..."): heard, never shown
         else:
             for w in re.finditer(r'\S+', part):
                 s = len(spoken) + w.start(); units.append((w.group(), s, len(spoken) + w.end()))
@@ -34,14 +38,16 @@ def main(narration, out, only=None):
         prev = parse(blocks[i-1]['text'])[0][-300:] if i else None
         nxt = parse(blocks[i+1]['text'])[0][:300] if i + 1 < len(blocks) else None
         if n.get('provider') == 'deepgram':
-            deepgram_tts.tts(spoken, n['voice_id'], mp3)
+            deepgram_tts.tts(spoken, b.get('voice_id', n['voice_id']), mp3)
             dur = float(subprocess.check_output(['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', mp3]).decode())
             try:
                 words = deepgram_tts.align_words(units, spoken, mp3, dur)
             except Exception as e:   # speech-to-text unavailable: fall back to estimated timings
                 print('  word timing estimated (', e, ')'); words = deepgram_tts.estimate_words(units, len(spoken), mp3, dur)
         else:
-            al = tts(spoken, n['voice_id'], mp3, model=n.get('model', 'eleven_multilingual_v2'), prev_text=prev, next_text=nxt, settings=n.get('settings'))
+            mdl = b.get('model', n.get('model', 'eleven_multilingual_v2'))
+            v3 = mdl == 'eleven_v3'     # v3 takes no previous/next text
+            al = tts(spoken, b.get('voice_id', n['voice_id']), mp3, model=mdl, prev_text=None if v3 else prev, next_text=None if v3 else nxt, settings=b.get('settings', n.get('settings')))
             st, en = al['character_start_times_seconds'], al['character_end_times_seconds']
             words = [{'t': d, 's': round(st[min(a, len(st)-1)], 3), 'e': round(en[min(z-1, len(en)-1)], 3)} for d, a, z in units]
             dur = float(subprocess.check_output(['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', mp3]).decode())
